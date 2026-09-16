@@ -26,6 +26,7 @@ let searchQuery = '';
 let autoLockTimer = null;
 let toastTimer = null;
 let currentWindowLayout = null;
+const expandedGroupIds = new Set();
 const revealedFields = new Map();
 
 function afterNextPaint() {
@@ -103,6 +104,7 @@ function updateVaultSelect() {
 function enterLockedState() {
   appState.current = null;
   selectedGroupId = null;
+  expandedGroupIds.clear();
   revealedFields.clear();
   clearTimeout(autoLockTimer);
   document.querySelector('#entry-list').replaceChildren();
@@ -125,6 +127,7 @@ function enterVault(vault) {
   appState.current = vault;
   selectedGroupId = null;
   searchQuery = '';
+  expandedGroupIds.clear();
   revealedFields.clear();
   document.querySelector('#search-input').value = '';
   document.querySelector('#current-vault-name').textContent = selectedVaultName();
@@ -210,6 +213,31 @@ function renderGroup(group) {
   row.className = 'tree-row';
   row.classList.toggle('selected', group.id === selectedGroupId);
 
+  const childGroups = group.children.filter((node) => node.type === 'group');
+  const expanded = childGroups.length > 0 && expandedGroupIds.has(group.id);
+  const childrenId = `tree-children-${group.id}`;
+
+  const toggle = document.createElement('button');
+  toggle.type = 'button';
+  toggle.className = 'tree-toggle';
+  toggle.textContent = expanded ? '▾' : '›';
+  toggle.setAttribute('aria-label', `${expanded ? 'Collapse' : 'Expand'} ${group.name}`);
+  if (childGroups.length === 0) {
+    toggle.classList.add('leaf');
+    toggle.disabled = true;
+  } else {
+    toggle.setAttribute('aria-expanded', String(expanded));
+    toggle.setAttribute('aria-controls', childrenId);
+    toggle.addEventListener('click', () => {
+      if (expanded) {
+        expandedGroupIds.delete(group.id);
+      } else {
+        expandedGroupIds.add(group.id);
+      }
+      renderTree();
+    });
+  }
+
   const name = document.createElement('button');
   name.type = 'button';
   name.className = 'tree-name';
@@ -233,12 +261,13 @@ function renderGroup(group) {
   remove.setAttribute('aria-label', `Delete ${group.name}`);
   remove.addEventListener('click', () => deleteNode(group));
 
-  row.append(name, edit, remove);
+  row.append(toggle, name, edit, remove);
   container.append(row);
-  const childGroups = group.children.filter((node) => node.type === 'group');
   if (childGroups.length) {
     const children = document.createElement('div');
+    children.id = childrenId;
     children.className = 'tree-children';
+    children.hidden = !expanded;
     childGroups.forEach((child) => children.append(renderGroup(child)));
     container.append(children);
   }

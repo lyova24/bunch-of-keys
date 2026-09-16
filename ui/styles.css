@@ -401,9 +401,23 @@ textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in
 
 .tree-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 32px 32px;
+  grid-template-columns: 26px minmax(0, 1fr) 32px 32px;
   align-items: center;
 }
+
+.tree-toggle {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 32px;
+  padding: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 18px;
+}
+
+.tree-toggle:hover { color: var(--text); }
+.tree-toggle.leaf { visibility: hidden; }
 
 .tree-name {
   min-width: 0;

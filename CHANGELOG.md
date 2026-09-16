@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.0 - 2026-09-16
+
+- Collapsed all sidebar groups by default and added accessible controls for
+  expanding and collapsing nested groups.
+
 ## 0.2.1 - 2026-09-16
 
 - Made window dragging reliable by using Tauri's native drag region while
