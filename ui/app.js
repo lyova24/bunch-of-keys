@@ -223,8 +223,11 @@ function renderGroup(group) {
   const toggle = document.createElement('button');
   toggle.type = 'button';
   toggle.className = 'tree-toggle';
-  toggle.textContent = expanded ? '▾' : '›';
   toggle.setAttribute('aria-label', `${expanded ? 'Collapse' : 'Expand'} ${group.name}`);
+  const toggleIcon = document.createElement('span');
+  toggleIcon.className = 'tree-toggle-icon';
+  toggleIcon.setAttribute('aria-hidden', 'true');
+  toggle.append(toggleIcon);
   if (childGroups.length === 0) {
     toggle.classList.add('leaf');
     toggle.disabled = true;

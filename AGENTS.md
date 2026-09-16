@@ -6,6 +6,17 @@
   and version bump in one commit.
 - Start the one-line commit subject with the issue number, for example:
   `#12 add URL field click actions`.
+- After implementation and verification, show the result to the user and get
+  their explicit approval before closing the GitHub issue, unless the user has
+  explicitly authorized unattended issue processing. Pushing a commit does
+  not count as approval to close the issue.
+- Implement reordering and moving interactions with direct drag-and-drop. Do
+  not substitute arrow buttons unless the user explicitly requests them.
+- Treat acceptance criteria as the minimum. Fill in underspecified behavior
+  with a robust implementation and a coherent UX/UI rather than the smallest
+  literal code change.
+- Visually inspect relevant states for every UI issue in addition to running
+  automated code checks.
 - Update the version for every completed issue in `Cargo.toml`, the root
   `bunch-of-keys` package entry in `Cargo.lock`, and `tauri.conf.json`.
 - Record the new version and a short summary in `CHANGELOG.md`.

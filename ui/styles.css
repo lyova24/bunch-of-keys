@@ -413,10 +413,23 @@ textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in
   padding: 0;
   background: transparent;
   color: var(--muted);
-  font-size: 18px;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
 }
 
-.tree-toggle:hover { color: var(--text); }
+.tree-toggle-icon {
+  width: 7px;
+  height: 7px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform 140ms ease;
+}
+
+.tree-toggle[aria-expanded='true'] .tree-toggle-icon { transform: rotate(45deg); }
+.tree-toggle:hover { background: var(--accent-soft); color: var(--text); }
+.tree-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .tree-toggle.leaf { visibility: hidden; }
 
 .tree-name {
