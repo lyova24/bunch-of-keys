@@ -446,6 +446,7 @@ textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in
 .entry-card { background: var(--surface-raised); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
 
 .entry-header { min-height: 62px; gap: 10px; padding: 10px 12px; }
+.entry-toggle { flex: 0 0 30px; width: 30px; height: 36px; font-size: 18px; }
 .entry-symbol { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 9px; background: var(--surface-subtle); color: var(--accent); }
 .entry-title { flex: 1; min-width: 0; overflow: hidden; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 

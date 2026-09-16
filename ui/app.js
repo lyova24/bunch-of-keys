@@ -27,6 +27,7 @@ let autoLockTimer = null;
 let toastTimer = null;
 let currentWindowLayout = null;
 const expandedGroupIds = new Set();
+const expandedEntryIds = new Set();
 const revealedFields = new Map();
 
 function afterNextPaint() {
@@ -105,6 +106,7 @@ function enterLockedState() {
   appState.current = null;
   selectedGroupId = null;
   expandedGroupIds.clear();
+  expandedEntryIds.clear();
   revealedFields.clear();
   clearTimeout(autoLockTimer);
   document.querySelector('#entry-list').replaceChildren();
@@ -128,6 +130,7 @@ function enterVault(vault) {
   selectedGroupId = null;
   searchQuery = '';
   expandedGroupIds.clear();
+  expandedEntryIds.clear();
   revealedFields.clear();
   document.querySelector('#search-input').value = '';
   document.querySelector('#current-vault-name').textContent = selectedVaultName();
@@ -291,8 +294,22 @@ function renderEntry(entry) {
   const card = document.createElement('article');
   card.className = 'entry-card';
 
+  const expanded = expandedEntryIds.has(entry.id);
+  const fieldsId = `entry-fields-${entry.id}`;
+
   const header = document.createElement('div');
   header.className = 'entry-header';
+  const toggle = actionButton(expanded ? '▾' : '›', `${expanded ? 'Collapse' : 'Expand'} ${entry.name}`, () => {
+    if (expanded) {
+      expandedEntryIds.delete(entry.id);
+    } else {
+      expandedEntryIds.add(entry.id);
+    }
+    renderEntries();
+  });
+  toggle.classList.add('entry-toggle');
+  toggle.setAttribute('aria-expanded', String(expanded));
+  toggle.setAttribute('aria-controls', fieldsId);
   const symbol = document.createElement('div');
   symbol.className = 'entry-symbol';
   symbol.textContent = '⌁';
@@ -301,9 +318,12 @@ function renderEntry(entry) {
   title.textContent = entry.name;
   const edit = actionButton('✎', `Edit ${entry.name}`, () => openEntryDialog(entry));
   const remove = actionButton('×', `Delete ${entry.name}`, () => deleteNode(entry));
-  header.append(symbol, title, edit, remove);
+  header.append(toggle, symbol, title, edit, remove);
   card.append(header);
 
+  const fields = document.createElement('div');
+  fields.id = fieldsId;
+  fields.hidden = !expanded;
   entry.fields.forEach((field) => {
     const row = document.createElement('div');
     row.className = 'field-row';
@@ -342,8 +362,9 @@ function renderEntry(entry) {
         notify(String(error));
       }
     }));
-    card.append(row);
+    fields.append(row);
   });
+  card.append(fields);
   return card;
 }
 

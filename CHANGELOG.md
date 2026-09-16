@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.0 - 2026-09-16
+
+- Collapsed entries by default and added per-entry controls that reveal or
+  hide their fields at every group nesting level.
+
 ## 0.3.0 - 2026-09-16
 
 - Collapsed all sidebar groups by default and added accessible controls for
