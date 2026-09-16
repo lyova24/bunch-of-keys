@@ -629,13 +629,6 @@ document.querySelector('#close-window').addEventListener('click', async () => {
     notify(String(error));
   }
 });
-document.querySelector('.window-chrome').addEventListener('pointerdown', (event) => {
-  if (event.button !== 0 || event.target.closest('.window-controls')) return;
-  event.preventDefault();
-  currentWindow.startDragging().catch((error) => {
-    notify(`Cannot move window: ${String(error)}`);
-  });
-});
 document.querySelectorAll('[data-resize-direction]').forEach((handle) => {
   handle.addEventListener('pointerdown', async (event) => {
     if (event.button !== 0) return;

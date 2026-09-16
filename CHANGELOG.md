@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.1 - 2026-09-16
+
+- Made window dragging reliable by using Tauri's native drag region while
+  keeping title-bar controls interactive.
+
 ## 0.2.0 - 2026-09-16
 
 - Replaced the GNOME window frame with a compact in-app title bar.

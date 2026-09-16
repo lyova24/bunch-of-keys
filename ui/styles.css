@@ -103,7 +103,10 @@ body {
   min-width: 0;
   font-size: 13px;
   letter-spacing: 0.01em;
+  touch-action: none;
 }
+
+.window-brand > * { pointer-events: none; }
 
 .window-brand-mark {
   display: grid;
