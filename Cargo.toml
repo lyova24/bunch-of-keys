@@ -1,0 +1,41 @@
+[package]
+name = "bunch-of-keys"
+version = "0.1.0"
+description = "A local encrypted credential manager for Linux"
+authors = ["bunch-of-keys contributors"]
+edition = "2024"
+license = "MIT"
+rust-version = "1.85"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+arboard = { version = "3.6", default-features = false, features = ["wayland-data-control"] }
+argon2 = { version = "0.5.3", features = ["std", "zeroize"] }
+base64 = "0.22.1"
+chacha20poly1305 = "0.10.1"
+dbus = "0.9"
+directories = "6"
+rand = "0.8.5"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml_ng = "0.10"
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-autostart = "2"
+tauri-plugin-single-instance = "2"
+thiserror = "2.0"
+uuid = { version = "1.10", features = ["serde", "v4"] }
+zeroize = "1.8"
+
+[dev-dependencies]
+tempfile = "3"
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+module_name_repetitions = "allow"
+must_use_candidate = "allow"

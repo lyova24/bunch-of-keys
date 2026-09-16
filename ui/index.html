@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light dark">
+    <title>bunch-of-keys</title>
+    <link rel="stylesheet" href="styles.css">
+    <script type="module" src="app.js"></script>
+  </head>
+  <body>
+    <div id="app" aria-live="polite">
+      <section id="loading-view" class="center-view">
+        <div class="brand-mark" aria-hidden="true">⌁</div>
+        <p>Opening bunch-of-keys…</p>
+      </section>
+
+      <section id="setup-view" class="center-view" hidden>
+        <div class="setup-panel">
+          <div class="brand-mark" aria-hidden="true">⌁</div>
+          <h1>Create your first vault</h1>
+          <p class="muted">Everything inside the vault is encrypted with your master password.</p>
+          <form id="setup-form" class="stack-form">
+            <label>
+              Vault name
+              <input name="name" autocomplete="off" maxlength="80" value="Personal" required>
+            </label>
+            <label>
+              Master password
+              <input name="password" type="password" autocomplete="new-password" minlength="12" required>
+            </label>
+            <label>
+              Confirm password
+              <input name="confirmPassword" type="password" autocomplete="new-password" minlength="12" required>
+            </label>
+            <p class="form-error" role="alert"></p>
+            <button class="button primary block" type="submit">Create vault</button>
+          </form>
+          <p class="footnote">There is no password recovery. Store the master password somewhere safe.</p>
+        </div>
+      </section>
+
+      <section id="unlock-view" class="center-view" hidden>
+        <div class="unlock-panel">
+          <div class="brand-mark" aria-hidden="true">⌁</div>
+          <h1>Unlock vault</h1>
+          <p class="muted">Vault contents stay hidden until the password is verified.</p>
+          <form id="unlock-form" class="stack-form">
+            <label>
+              Vault
+              <select id="vault-select" name="vaultId" required></select>
+            </label>
+            <label>
+              Master password
+              <input name="password" type="password" autocomplete="current-password" autofocus required>
+            </label>
+            <p class="form-error" role="alert"></p>
+            <button class="button primary block" type="submit">Unlock</button>
+          </form>
+          <button id="open-new-vault" class="text-button" type="button">Create another vault</button>
+        </div>
+      </section>
+
+      <section id="vault-view" class="app-shell" hidden>
+        <header class="titlebar">
+          <div class="brand">
+            <div class="small-brand-mark" aria-hidden="true">⌁</div>
+            <div>
+              <strong>bunch-of-keys</strong>
+              <span id="current-vault-name">Unlocked</span>
+            </div>
+          </div>
+          <div class="title-actions">
+            <button id="settings-button" class="icon-button" type="button" aria-label="Settings">⚙</button>
+            <button id="lock-button" class="button secondary" type="button">Lock vault</button>
+          </div>
+        </header>
+
+        <div class="toolbar">
+          <label class="search-box">
+            <span aria-hidden="true">⌕</span>
+            <span class="sr-only">Search entries</span>
+            <input id="search-input" type="search" placeholder="Search entries and fields…">
+          </label>
+          <button id="new-group-button" class="button secondary" type="button">New group</button>
+          <button id="new-entry-button" class="button primary" type="button">New entry</button>
+          <label class="button secondary file-button">
+            Import YAML
+            <input id="yaml-input" type="file" accept=".yaml,.yml,text/yaml,application/yaml">
+          </label>
+        </div>
+
+        <div class="workspace">
+          <aside class="sidebar" aria-label="Vault groups">
+            <button id="all-entries-button" class="tree-main selected" type="button">
+              <span>All entries</span><small id="entry-count">0</small>
+            </button>
+            <div id="group-tree" class="group-tree"></div>
+          </aside>
+          <main class="content">
+            <div class="content-heading">
+              <div>
+                <h2 id="content-title">All entries</h2>
+                <span id="content-subtitle" class="muted"></span>
+              </div>
+            </div>
+            <div id="entry-list" class="entry-list"></div>
+            <div id="empty-state" class="empty-state" hidden>
+              <div aria-hidden="true">⌁</div>
+              <h3>No entries here</h3>
+              <p>Create an entry, choose another group, or change the search.</p>
+            </div>
+          </main>
+        </div>
+      </section>
+    </div>
+
+    <dialog id="vault-dialog">
+      <form id="vault-form" class="dialog-form">
+        <div class="dialog-heading">
+          <h2>Create vault</h2>
+          <button class="icon-button dialog-close" type="button" aria-label="Close">×</button>
+        </div>
+        <label>Vault name<input name="name" autocomplete="off" maxlength="80" required></label>
+        <label>Master password<input name="password" type="password" autocomplete="new-password" minlength="12" required></label>
+        <label>Confirm password<input name="confirmPassword" type="password" autocomplete="new-password" minlength="12" required></label>
+        <p class="form-error" role="alert"></p>
+        <div class="dialog-actions">
+          <button class="button secondary dialog-close" type="button">Cancel</button>
+          <button class="button primary" type="submit">Create</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="group-dialog">
+      <form id="group-form" class="dialog-form">
+        <div class="dialog-heading">
+          <h2 id="group-dialog-title">New group</h2>
+          <button class="icon-button dialog-close" type="button" aria-label="Close">×</button>
+        </div>
+        <label>Group name<input name="name" autocomplete="off" maxlength="200" required></label>
+        <label id="group-parent-label">Parent group<select name="parentId"></select></label>
+        <input name="nodeId" type="hidden">
+        <p class="form-error" role="alert"></p>
+        <div class="dialog-actions">
+          <button class="button secondary dialog-close" type="button">Cancel</button>
+          <button class="button primary" type="submit">Save</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="entry-dialog" class="wide-dialog">
+      <form id="entry-form" class="dialog-form">
+        <div class="dialog-heading">
+          <h2 id="entry-dialog-title">New entry</h2>
+          <button class="icon-button dialog-close" type="button" aria-label="Close">×</button>
+        </div>
+        <label>Entry name<input name="name" autocomplete="off" maxlength="200" required></label>
+        <label id="entry-parent-label">Group<select name="parentId"></select></label>
+        <input name="entryId" type="hidden">
+        <div class="field-editor-heading">
+          <strong>Fields</strong>
+          <button id="add-field-button" class="text-button" type="button">+ Add field</button>
+        </div>
+        <div id="field-editor" class="field-editor"></div>
+        <p class="form-error" role="alert"></p>
+        <div class="dialog-actions">
+          <button class="button secondary dialog-close" type="button">Cancel</button>
+          <button class="button primary" type="submit">Save entry</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="settings-dialog">
+      <form id="settings-form" class="dialog-form">
+        <div class="dialog-heading">
+          <h2>Settings</h2>
+          <button class="icon-button dialog-close" type="button" aria-label="Close">×</button>
+        </div>
+        <label class="switch-row">
+          <span><strong>Start automatically</strong><small>Launch locked when you sign in</small></span>
+          <input name="autostart" type="checkbox">
+        </label>
+        <label>
+          Lock after inactivity
+          <select name="autoLockSeconds">
+            <option value="60">1 minute</option>
+            <option value="300">5 minutes</option>
+            <option value="900">15 minutes</option>
+            <option value="3600">1 hour</option>
+          </select>
+        </label>
+        <label>
+          Clear copied values after
+          <select name="clipboardClearSeconds">
+            <option value="10">10 seconds</option>
+            <option value="30">30 seconds</option>
+            <option value="60">1 minute</option>
+            <option value="120">2 minutes</option>
+          </select>
+        </label>
+        <p class="form-error" role="alert"></p>
+        <div class="dialog-actions">
+          <button class="button secondary dialog-close" type="button">Cancel</button>
+          <button class="button primary" type="submit">Save settings</button>
+        </div>
+      </form>
+    </dialog>
+
+    <div id="toast" class="toast" role="status" hidden></div>
+  </body>
+</html>

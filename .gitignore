@@ -1,0 +1,12 @@
+/target/
+/gen/
+/node_modules/
+*.swp
+*.tmp
+*.bak
+.DS_Store
+
+# Local vaults and development state must never be committed.
+*.bok
+/.data/
+/.config/
