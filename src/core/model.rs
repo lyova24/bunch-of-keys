@@ -431,4 +431,37 @@ mod tests {
             Err(ModelError::EntryNotFound)
         ));
     }
+
+    #[test]
+    fn replacing_an_entry_preserves_the_requested_field_order_and_properties() {
+        let mut vault = VaultData::default();
+        let entry_id = vault
+            .add_entry(
+                None,
+                "Ordered",
+                vec![
+                    field("Username", "alice", false),
+                    field("Password", "secret", true),
+                ],
+            )
+            .unwrap();
+        let original = find_entry(&vault.nodes, entry_id).unwrap().fields.clone();
+        let reordered = original
+            .iter()
+            .rev()
+            .map(|field| FieldInput {
+                id: Some(field.id),
+                label: field.label.clone(),
+                value: field.value.clone(),
+                kind: field.kind,
+                masked: field.masked,
+            })
+            .collect();
+
+        vault.replace_entry(entry_id, "Ordered", reordered).unwrap();
+
+        let fields = &find_entry(&vault.nodes, entry_id).unwrap().fields;
+        assert_eq!(fields[0], original[1]);
+        assert_eq!(fields[1], original[0]);
+    }
 }

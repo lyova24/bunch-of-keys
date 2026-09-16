@@ -488,12 +488,43 @@ dialog::backdrop { background: light-dark(rgb(19 24 34 / 32%), rgb(0 0 0 / 58%))
 .field-editor { display: flex; flex-direction: column; gap: 10px; }
 .field-editor-row {
   display: grid;
-  grid-template-columns: minmax(120px, 0.8fr) minmax(160px, 1.4fr) 110px auto 38px;
+  grid-template-columns: 28px minmax(120px, 0.8fr) minmax(160px, 1.4fr) 110px auto 38px;
   align-items: end;
   gap: 8px;
   padding-top: 10px;
   border-top: 1px solid var(--border);
 }
+
+.field-drag-handle {
+  display: grid;
+  place-items: center;
+  align-self: end;
+  width: 28px;
+  height: 42px;
+  padding: 0;
+  background: transparent;
+  color: var(--muted);
+  border: 0;
+  border-radius: 7px;
+  cursor: grab;
+}
+
+.field-drag-handle:hover { background: var(--accent-soft); color: var(--text); }
+.field-drag-handle:active { cursor: grabbing; }
+.field-drag-handle:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.field-drag-handle span {
+  width: 3px;
+  height: 3px;
+  background: currentColor;
+  border-radius: 50%;
+  box-shadow: 6px 0 currentColor, 0 6px currentColor, 6px 6px currentColor,
+    0 12px currentColor, 6px 12px currentColor;
+  transform: translate(-3px, -6px);
+}
+
+.field-editor-row.dragging { opacity: 0.45; }
+.field-editor-row.drop-before { border-top-color: var(--accent); }
+.field-editor-row.drop-after { box-shadow: 0 2px 0 var(--accent); }
 
 .compact-check { align-items: center; flex-direction: row; min-height: 42px; white-space: nowrap; }
 .compact-check input { width: 18px; height: 18px; }

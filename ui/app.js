@@ -447,6 +447,41 @@ function addFieldEditorRow(field = {}) {
   row.className = 'field-editor-row';
   row.dataset.fieldId = field.id ?? '';
 
+  const dragHandle = document.createElement('button');
+  dragHandle.type = 'button';
+  dragHandle.className = 'field-drag-handle';
+  dragHandle.draggable = true;
+  dragHandle.setAttribute('aria-label', `Drag ${field.label ?? 'field'} to reorder`);
+  dragHandle.title = 'Drag to reorder';
+  dragHandle.append(document.createElement('span'));
+  dragHandle.addEventListener('dragstart', (event) => {
+    draggedFieldRow = row;
+    row.classList.add('dragging');
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', row.dataset.fieldId || 'new-field');
+  });
+  dragHandle.addEventListener('dragend', () => {
+    row.classList.remove('dragging');
+    draggedFieldRow = null;
+    clearFieldDropIndicators();
+  });
+  row.addEventListener('dragover', (event) => {
+    if (!draggedFieldRow || draggedFieldRow === row) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    clearFieldDropIndicators();
+    const insertAfter = event.clientY > row.getBoundingClientRect().top + row.offsetHeight / 2;
+    row.classList.add(insertAfter ? 'drop-after' : 'drop-before');
+  });
+  row.addEventListener('drop', (event) => {
+    if (!draggedFieldRow || draggedFieldRow === row) return;
+    event.preventDefault();
+    const insertAfter = event.clientY > row.getBoundingClientRect().top + row.offsetHeight / 2;
+    const editor = document.querySelector('#field-editor');
+    editor.insertBefore(draggedFieldRow, insertAfter ? row.nextSibling : row);
+    clearFieldDropIndicators();
+  });
+
   const label = labeledInput('Label', 'text', field.label ?? '');
   const value = labeledInput('Value', field.masked ? 'password' : 'text', field.value ?? '');
   const kindLabel = document.createElement('label');
@@ -475,9 +510,17 @@ function addFieldEditorRow(field = {}) {
   });
 
   const remove = actionButton('×', 'Remove field', () => row.remove());
-  row.append(label.wrapper, value.wrapper, kindLabel, masked, remove);
+  row.append(dragHandle, label.wrapper, value.wrapper, kindLabel, masked, remove);
   row._inputs = { label: label.input, value: value.input, kind, masked: checkbox };
   document.querySelector('#field-editor').append(row);
+}
+
+let draggedFieldRow = null;
+
+function clearFieldDropIndicators() {
+  document.querySelectorAll('.field-editor-row').forEach((row) => {
+    row.classList.remove('drop-before', 'drop-after');
+  });
 }
 
 function labeledInput(text, type, value) {

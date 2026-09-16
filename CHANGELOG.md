@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.0 - 2026-09-16
+
+- Added field-order controls to the entry editor and persisted the selected
+  order without changing field identifiers, values, types, or masking.
+
 ## 0.4.0 - 2026-09-16
 
 - Collapsed entries by default and added per-entry controls that reveal or
