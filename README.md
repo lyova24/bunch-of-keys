@@ -17,6 +17,7 @@ password recovery, telemetry, or a remote web interface.
 - Automatic locking after five minutes of inactivity and on Linux
   screen-lock/suspend signals.
 - Tray operation and optional autostart.
+- A compact frameless window with in-app controls and rounded corners.
 - Debian package output.
 
 All group names, entry names, field labels, and values are encrypted. The local

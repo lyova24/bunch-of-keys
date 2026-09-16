@@ -10,7 +10,7 @@ use std::{
 };
 
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, Emitter, LogicalSize, Manager, State};
 use tauri_plugin_autostart::ManagerExt;
 use thiserror::Error;
 use uuid::Uuid;
@@ -22,7 +22,7 @@ use crate::{
     view::VaultView,
 };
 
-const MIN_PASSWORD_CHARS: usize = 12;
+const MIN_PASSWORD_CHARS: usize = 8;
 
 struct Session {
     record: VaultRecord,
@@ -61,7 +61,7 @@ enum AppError {
     DuplicateVaultName,
     #[error("vault name must contain between 1 and 80 characters")]
     InvalidVaultName,
-    #[error("master password must contain at least 12 characters")]
+    #[error("master password must contain at least 8 characters")]
     WeakPassword,
     #[error("vault metadata does not match the encrypted file")]
     VaultIdMismatch,
@@ -310,6 +310,30 @@ pub fn lock_vault(app: AppHandle, state: State<'_, AppState>) {
 }
 
 #[tauri::command]
+pub fn minimize_window(window: tauri::WebviewWindow) -> CommandResult<()> {
+    window.minimize().map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn hide_window(window: tauri::WebviewWindow) -> CommandResult<()> {
+    window.hide().map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn resize_window(width: f64, height: f64, window: tauri::WebviewWindow) -> CommandResult<()> {
+    if !width.is_finite()
+        || !height.is_finite()
+        || !(440.0..=2_000.0).contains(&width)
+        || !(480.0..=1_400.0).contains(&height)
+    {
+        return Err("window dimensions are outside the supported range".to_owned());
+    }
+    window
+        .set_size(LogicalSize::new(width, height))
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 pub fn add_group(
     parent_id: Option<Uuid>,
     name: String,
@@ -419,6 +443,12 @@ mod tests {
     use tempfile::tempdir;
 
     use super::*;
+
+    #[test]
+    fn accepts_master_passwords_from_eight_characters() {
+        assert!(validate_password(b"12345678").is_ok());
+        assert!(validate_password(b"1234567").is_err());
+    }
 
     #[test]
     fn creates_and_reopens_multiple_independent_vaults() {

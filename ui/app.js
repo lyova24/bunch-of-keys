@@ -1,5 +1,6 @@
 const invoke = window.__TAURI__.core.invoke;
 const listen = window.__TAURI__.event.listen;
+const currentWindow = window.__TAURI__.window.getCurrentWindow();
 
 const views = {
   loading: document.querySelector('#loading-view'),
@@ -24,9 +25,36 @@ let selectedGroupId = null;
 let searchQuery = '';
 let autoLockTimer = null;
 let toastTimer = null;
+let currentWindowLayout = null;
 const revealedFields = new Map();
 
+function afterNextPaint() {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(resolve));
+  });
+}
+
+async function setWindowLayout(name) {
+  if (currentWindowLayout === name) return;
+  try {
+    await afterNextPaint();
+    let width = 900;
+    let height = 680;
+    if (name === 'setup' || name === 'unlock') {
+      const panel = views[name].querySelector('.setup-panel, .unlock-panel');
+      const chromeHeight = document.querySelector('.window-chrome').offsetHeight;
+      width = 520;
+      height = Math.ceil(panel.scrollHeight + chromeHeight + 16);
+    }
+    await invoke('resize_window', { width, height });
+    currentWindowLayout = name;
+  } catch (error) {
+    notify(`Cannot resize window: ${String(error)}`);
+  }
+}
+
 function showView(name) {
+  document.body.dataset.view = name;
   Object.entries(views).forEach(([key, element]) => {
     element.hidden = key !== name;
   });
@@ -85,7 +113,9 @@ function enterLockedState() {
     if (dialog.open) dialog.close();
   });
   updateVaultSelect();
-  showView(appState.vaults.length ? 'unlock' : 'setup');
+  const view = appState.vaults.length ? 'unlock' : 'setup';
+  showView(view);
+  void setWindowLayout(view);
   const password = document.querySelector('#unlock-form input[name="password"]');
   password.value = '';
   if (appState.vaults.length) password.focus();
@@ -99,6 +129,7 @@ function enterVault(vault) {
   document.querySelector('#search-input').value = '';
   document.querySelector('#current-vault-name').textContent = selectedVaultName();
   showView('vault');
+  void setWindowLayout('vault');
   renderVault();
   scheduleAutoLock();
 }
@@ -584,6 +615,38 @@ document.querySelector('#settings-button').addEventListener('click', () => {
 });
 
 document.querySelector('#lock-button').addEventListener('click', () => invoke('lock_vault'));
+document.querySelector('#minimize-window').addEventListener('click', async () => {
+  try {
+    await invoke('minimize_window');
+  } catch (error) {
+    notify(String(error));
+  }
+});
+document.querySelector('#close-window').addEventListener('click', async () => {
+  try {
+    await invoke('hide_window');
+  } catch (error) {
+    notify(String(error));
+  }
+});
+document.querySelector('.window-chrome').addEventListener('pointerdown', (event) => {
+  if (event.button !== 0 || event.target.closest('.window-controls')) return;
+  event.preventDefault();
+  currentWindow.startDragging().catch((error) => {
+    notify(`Cannot move window: ${String(error)}`);
+  });
+});
+document.querySelectorAll('[data-resize-direction]').forEach((handle) => {
+  handle.addEventListener('pointerdown', async (event) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    try {
+      await currentWindow.startResizeDragging(handle.dataset.resizeDirection);
+    } catch (error) {
+      notify(`Cannot resize window: ${String(error)}`);
+    }
+  });
+});
 document.querySelector('#open-new-vault').addEventListener('click', () => dialogs.vault.showModal());
 document.querySelector('#new-group-button').addEventListener('click', () => openGroupDialog());
 document.querySelector('#new-entry-button').addEventListener('click', () => openEntryDialog());

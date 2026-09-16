@@ -9,68 +9,86 @@
     <script type="module" src="app.js"></script>
   </head>
   <body>
-    <div id="app" aria-live="polite">
-      <section id="loading-view" class="center-view">
-        <div class="brand-mark" aria-hidden="true">⌁</div>
-        <p>Opening bunch-of-keys…</p>
-      </section>
+    <div class="resize-handle resize-n" data-resize-direction="North" aria-hidden="true"></div>
+    <div class="resize-handle resize-ne" data-resize-direction="NorthEast" aria-hidden="true"></div>
+    <div class="resize-handle resize-e" data-resize-direction="East" aria-hidden="true"></div>
+    <div class="resize-handle resize-se" data-resize-direction="SouthEast" aria-hidden="true"></div>
+    <div class="resize-handle resize-s" data-resize-direction="South" aria-hidden="true"></div>
+    <div class="resize-handle resize-sw" data-resize-direction="SouthWest" aria-hidden="true"></div>
+    <div class="resize-handle resize-w" data-resize-direction="West" aria-hidden="true"></div>
+    <div class="resize-handle resize-nw" data-resize-direction="NorthWest" aria-hidden="true"></div>
 
-      <section id="setup-view" class="center-view" hidden>
-        <div class="setup-panel">
-          <div class="brand-mark" aria-hidden="true">⌁</div>
-          <h1>Create your first vault</h1>
-          <p class="muted">Everything inside the vault is encrypted with your master password.</p>
-          <form id="setup-form" class="stack-form">
-            <label>
-              Vault name
-              <input name="name" autocomplete="off" maxlength="80" value="Personal" required>
-            </label>
-            <label>
-              Master password
-              <input name="password" type="password" autocomplete="new-password" minlength="12" required>
-            </label>
-            <label>
-              Confirm password
-              <input name="confirmPassword" type="password" autocomplete="new-password" minlength="12" required>
-            </label>
-            <p class="form-error" role="alert"></p>
-            <button class="button primary block" type="submit">Create vault</button>
-          </form>
-          <p class="footnote">There is no password recovery. Store the master password somewhere safe.</p>
+    <div id="window-frame">
+      <header class="window-chrome">
+        <div class="window-brand">
+          <span class="window-brand-mark" aria-hidden="true">⌁</span>
+          <strong>bunch-of-keys</strong>
         </div>
-      </section>
+        <div class="window-controls" aria-label="Window controls">
+          <button id="minimize-window" class="window-control" type="button" title="Minimize" aria-label="Minimize window">−</button>
+          <button id="close-window" class="window-control close" type="button" title="Hide to tray" aria-label="Hide window to tray">×</button>
+        </div>
+      </header>
 
-      <section id="unlock-view" class="center-view" hidden>
-        <div class="unlock-panel">
+      <div id="app" aria-live="polite">
+        <section id="loading-view" class="center-view">
           <div class="brand-mark" aria-hidden="true">⌁</div>
-          <h1>Unlock vault</h1>
-          <p class="muted">Vault contents stay hidden until the password is verified.</p>
-          <form id="unlock-form" class="stack-form">
-            <label>
-              Vault
-              <select id="vault-select" name="vaultId" required></select>
-            </label>
-            <label>
-              Master password
-              <input name="password" type="password" autocomplete="current-password" autofocus required>
-            </label>
-            <p class="form-error" role="alert"></p>
-            <button class="button primary block" type="submit">Unlock</button>
-          </form>
-          <button id="open-new-vault" class="text-button" type="button">Create another vault</button>
-        </div>
-      </section>
+          <p>Opening bunch-of-keys…</p>
+        </section>
+
+        <section id="setup-view" class="center-view" hidden>
+          <div class="setup-panel">
+            <div class="brand-mark" aria-hidden="true">⌁</div>
+            <h1>Create your first vault</h1>
+            <p class="muted">Everything inside the vault is encrypted with your master password.</p>
+            <form id="setup-form" class="stack-form">
+              <label>
+                Vault name
+                <input name="name" autocomplete="off" maxlength="80" value="Personal" required>
+              </label>
+              <label>
+                Master password
+                <input name="password" type="password" autocomplete="new-password" minlength="8" required>
+              </label>
+              <label>
+                Confirm password
+                <input name="confirmPassword" type="password" autocomplete="new-password" minlength="8" required>
+              </label>
+              <p class="form-error" role="alert"></p>
+              <button class="button primary block" type="submit">Create vault</button>
+            </form>
+            <p class="footnote">There is no password recovery. Store the master password somewhere safe.</p>
+          </div>
+        </section>
+
+        <section id="unlock-view" class="center-view" hidden>
+          <div class="unlock-panel">
+            <div class="brand-mark" aria-hidden="true">⌁</div>
+            <h1>Unlock vault</h1>
+            <p class="muted">Vault contents stay hidden until the password is verified.</p>
+            <form id="unlock-form" class="stack-form">
+              <label>
+                Vault
+                <select id="vault-select" name="vaultId" required></select>
+              </label>
+              <label>
+                Master password
+                <input name="password" type="password" autocomplete="current-password" autofocus required>
+              </label>
+              <p class="form-error" role="alert"></p>
+              <button class="button primary block" type="submit">Unlock</button>
+            </form>
+            <button id="open-new-vault" class="text-button" type="button">Create another vault</button>
+          </div>
+        </section>
 
       <section id="vault-view" class="app-shell" hidden>
-        <header class="titlebar">
-          <div class="brand">
-            <div class="small-brand-mark" aria-hidden="true">⌁</div>
-            <div>
-              <strong>bunch-of-keys</strong>
-              <span id="current-vault-name">Unlocked</span>
-            </div>
+        <header class="vaultbar">
+          <div class="vault-identity">
+            <span class="vault-label">Current vault</span>
+            <strong id="current-vault-name">Unlocked</strong>
           </div>
-          <div class="title-actions">
+          <div class="vault-actions">
             <button id="settings-button" class="icon-button" type="button" aria-label="Settings">⚙</button>
             <button id="lock-button" class="button secondary" type="button">Lock vault</button>
           </div>
@@ -113,6 +131,7 @@
           </main>
         </div>
       </section>
+      </div>
     </div>
 
     <dialog id="vault-dialog">
@@ -122,8 +141,8 @@
           <button class="icon-button dialog-close" type="button" aria-label="Close">×</button>
         </div>
         <label>Vault name<input name="name" autocomplete="off" maxlength="80" required></label>
-        <label>Master password<input name="password" type="password" autocomplete="new-password" minlength="12" required></label>
-        <label>Confirm password<input name="confirmPassword" type="password" autocomplete="new-password" minlength="12" required></label>
+        <label>Master password<input name="password" type="password" autocomplete="new-password" minlength="8" required></label>
+        <label>Confirm password<input name="confirmPassword" type="password" autocomplete="new-password" minlength="8" required></label>
         <p class="form-error" role="alert"></p>
         <div class="dialog-actions">
           <button class="button secondary dialog-close" type="button">Cancel</button>
