@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.0 - 2026-09-16
+
+- Replaced the sidebar and group/entry creation dialogs with one compact
+  workspace for inline creation, editing, and inspection.
+- Added root-level and nested drafts, full read-only entry paths, compact
+  collapsed entry rows, and direct drag-and-drop for moving or reordering
+  groups and entries with cyclic nesting prevention.
+- Matched the workspace across light, dark, desktop, and narrow layouts with
+  dense hierarchy lines, compact fields, and consistent icon controls.
+
 ## 0.5.0 - 2026-09-16
 
 - Added field-order controls to the entry editor and persisted the selected

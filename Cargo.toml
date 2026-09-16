@@ -1,6 +1,6 @@
 [package]
 name = "bunch-of-keys"
-version = "0.5.0"
+version = "1.0.0"
 description = "A local encrypted credential manager for Linux"
 authors = ["bunch-of-keys contributors"]
 edition = "2024"

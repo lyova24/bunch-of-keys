@@ -21,12 +21,36 @@
     <div id="window-frame">
       <header class="window-chrome">
         <div class="window-brand" data-tauri-drag-region>
-          <span class="window-brand-mark" aria-hidden="true">⌁</span>
-          <strong>bunch-of-keys</strong>
+          <span class="window-brand-mark" aria-hidden="true"><span data-icon="key-round"></span></span>
+          <span class="window-brand-copy">
+            <small id="window-brand-kicker">Local vault</small>
+            <strong id="current-vault-name">bunch-of-keys</strong>
+          </span>
+        </div>
+        <label class="chrome-search" data-vault-only hidden>
+          <span class="sr-only">Search entries and fields</span>
+          <span data-icon="search" aria-hidden="true"></span>
+          <input id="search-input" type="search" placeholder="Search…" autocomplete="off">
+        </label>
+        <div class="chrome-app-actions" data-vault-only hidden>
+          <details id="root-add-menu" class="add-control">
+            <summary class="icon-button primary-icon" aria-label="Add to vault"><span data-icon="plus"></span></summary>
+            <div class="add-menu" role="menu">
+              <button type="button" role="menuitem" data-add-kind="group">
+                <span data-icon="folder-plus"></span><span>Group</span>
+              </button>
+              <button type="button" role="menuitem" data-add-kind="entry">
+                <span data-icon="file-plus"></span><span>Entry</span>
+              </button>
+            </div>
+          </details>
+          <button id="theme-button" class="icon-button" type="button" aria-label="Use light theme"><span data-icon="sun-moon"></span></button>
+          <button id="settings-button" class="icon-button" type="button" aria-label="Settings"><span data-icon="settings"></span></button>
+          <button id="lock-button" class="button secondary compact-button" type="button"><span data-icon="lock"></span><span>Lock</span></button>
         </div>
         <div class="window-controls" aria-label="Window controls">
-          <button id="minimize-window" class="window-control" type="button" title="Minimize" aria-label="Minimize window">−</button>
-          <button id="close-window" class="window-control close" type="button" title="Hide to tray" aria-label="Hide window to tray">×</button>
+          <button id="minimize-window" class="window-control" type="button" title="Minimize" aria-label="Minimize window"><span data-icon="minus"></span></button>
+          <button id="close-window" class="window-control close" type="button" title="Hide to tray" aria-label="Hide window to tray"><span data-icon="x"></span></button>
         </div>
       </header>
 
@@ -83,53 +107,19 @@
         </section>
 
       <section id="vault-view" class="app-shell" hidden>
-        <header class="vaultbar">
-          <div class="vault-identity">
-            <span class="vault-label">Current vault</span>
-            <strong id="current-vault-name">Unlocked</strong>
+        <main class="vault-workspace" aria-label="Vault contents">
+          <div id="workspace-tree" class="workspace-tree" data-children data-parent-id=""></div>
+          <div id="empty-state" class="empty-state" hidden>
+            <span data-icon="key-round" aria-hidden="true"></span>
+            <h3>No entries or groups</h3>
+            <p>Use the plus button above to add the first one.</p>
           </div>
-          <div class="vault-actions">
-            <button id="settings-button" class="icon-button" type="button" aria-label="Settings">⚙</button>
-            <button id="lock-button" class="button secondary" type="button">Lock vault</button>
+          <div id="search-empty-state" class="empty-state" hidden>
+            <span data-icon="search" aria-hidden="true"></span>
+            <h3>No matches</h3>
+            <p>Try a different search.</p>
           </div>
-        </header>
-
-        <div class="toolbar">
-          <label class="search-box">
-            <span aria-hidden="true">⌕</span>
-            <span class="sr-only">Search entries</span>
-            <input id="search-input" type="search" placeholder="Search entries and fields…">
-          </label>
-          <button id="new-group-button" class="button secondary" type="button">New group</button>
-          <button id="new-entry-button" class="button primary" type="button">New entry</button>
-          <label class="button secondary file-button">
-            Import YAML
-            <input id="yaml-input" type="file" accept=".yaml,.yml,text/yaml,application/yaml">
-          </label>
-        </div>
-
-        <div class="workspace">
-          <aside class="sidebar" aria-label="Vault groups">
-            <button id="all-entries-button" class="tree-main selected" type="button">
-              <span>All entries</span><small id="entry-count">0</small>
-            </button>
-            <div id="group-tree" class="group-tree"></div>
-          </aside>
-          <main class="content">
-            <div class="content-heading">
-              <div>
-                <h2 id="content-title">All entries</h2>
-                <span id="content-subtitle" class="muted"></span>
-              </div>
-            </div>
-            <div id="entry-list" class="entry-list"></div>
-            <div id="empty-state" class="empty-state" hidden>
-              <div aria-hidden="true">⌁</div>
-              <h3>No entries here</h3>
-              <p>Create an entry, choose another group, or change the search.</p>
-            </div>
-          </main>
-        </div>
+        </main>
       </section>
       </div>
     </div>
@@ -147,45 +137,6 @@
         <div class="dialog-actions">
           <button class="button secondary dialog-close" type="button">Cancel</button>
           <button class="button primary" type="submit">Create</button>
-        </div>
-      </form>
-    </dialog>
-
-    <dialog id="group-dialog">
-      <form id="group-form" class="dialog-form">
-        <div class="dialog-heading">
-          <h2 id="group-dialog-title">New group</h2>
-          <button class="icon-button dialog-close" type="button" aria-label="Close">×</button>
-        </div>
-        <label>Group name<input name="name" autocomplete="off" maxlength="200" required></label>
-        <label id="group-parent-label">Parent group<select name="parentId"></select></label>
-        <input name="nodeId" type="hidden">
-        <p class="form-error" role="alert"></p>
-        <div class="dialog-actions">
-          <button class="button secondary dialog-close" type="button">Cancel</button>
-          <button class="button primary" type="submit">Save</button>
-        </div>
-      </form>
-    </dialog>
-
-    <dialog id="entry-dialog" class="wide-dialog">
-      <form id="entry-form" class="dialog-form">
-        <div class="dialog-heading">
-          <h2 id="entry-dialog-title">New entry</h2>
-          <button class="icon-button dialog-close" type="button" aria-label="Close">×</button>
-        </div>
-        <label>Entry name<input name="name" autocomplete="off" maxlength="200" required></label>
-        <label id="entry-parent-label">Group<select name="parentId"></select></label>
-        <input name="entryId" type="hidden">
-        <div class="field-editor-heading">
-          <strong>Fields</strong>
-          <button id="add-field-button" class="text-button" type="button">+ Add field</button>
-        </div>
-        <div id="field-editor" class="field-editor"></div>
-        <p class="form-error" role="alert"></p>
-        <div class="dialog-actions">
-          <button class="button secondary dialog-close" type="button">Cancel</button>
-          <button class="button primary" type="submit">Save entry</button>
         </div>
       </form>
     </dialog>
@@ -218,6 +169,13 @@
             <option value="120">2 minutes</option>
           </select>
         </label>
+        <div class="settings-import">
+          <span><strong>Import YAML</strong><small>Add imported groups and entries at the vault root.</small></span>
+          <label class="button secondary file-button">
+            <span data-icon="upload"></span>Choose file
+            <input id="yaml-input" type="file" accept=".yaml,.yml,text/yaml,application/yaml">
+          </label>
+        </div>
         <p class="form-error" role="alert"></p>
         <div class="dialog-actions">
           <button class="button secondary dialog-close" type="button">Cancel</button>

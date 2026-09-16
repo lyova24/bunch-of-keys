@@ -48,6 +48,7 @@ fn main() {
             app::update_entry,
             app::rename_node,
             app::delete_node,
+            app::move_node,
             app::import_yaml_file,
             app::reveal_field,
             app::copy_field,

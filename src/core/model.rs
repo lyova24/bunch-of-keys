@@ -122,6 +122,10 @@ pub enum ModelError {
     NodeNotFound,
     #[error("the requested entry does not exist")]
     EntryNotFound,
+    #[error("a group cannot be moved inside itself or one of its descendants")]
+    CyclicMove,
+    #[error("the requested node position does not exist")]
+    PositionOutOfBounds,
     #[error("field identifiers must be unique inside an entry")]
     DuplicateFieldId,
 }
@@ -184,6 +188,50 @@ impl VaultData {
         } else {
             Err(ModelError::NodeNotFound)
         }
+    }
+
+    pub fn move_node(
+        &mut self,
+        node_id: Uuid,
+        parent_id: Option<Uuid>,
+        index: usize,
+    ) -> Result<(), ModelError> {
+        let (current_parent_id, current_index) =
+            node_location(&self.nodes, node_id, None).ok_or(ModelError::NodeNotFound)?;
+
+        if parent_id == Some(node_id) {
+            return Err(ModelError::CyclicMove);
+        }
+
+        if let Some(parent_id) = parent_id {
+            let node = find_node(&self.nodes, node_id).ok_or(ModelError::NodeNotFound)?;
+            if matches!(node, Node::Group(group) if contains_node(&group.children, parent_id)) {
+                return Err(ModelError::CyclicMove);
+            }
+            if children(&self.nodes, Some(parent_id)).is_none() {
+                return Err(ModelError::ParentNotFound);
+            }
+        }
+
+        let mut target_len = children(&self.nodes, parent_id)
+            .ok_or(ModelError::ParentNotFound)?
+            .len();
+        if current_parent_id == parent_id {
+            target_len -= 1;
+        }
+        if index > target_len {
+            return Err(ModelError::PositionOutOfBounds);
+        }
+
+        if current_parent_id == parent_id && current_index == index {
+            return Ok(());
+        }
+
+        let node = take_node(&mut self.nodes, node_id).ok_or(ModelError::NodeNotFound)?;
+        children_mut(&mut self.nodes, parent_id)
+            .ok_or(ModelError::ParentNotFound)?
+            .insert(index, node);
+        Ok(())
     }
 
     pub fn field(&self, entry_id: Uuid, field_id: Uuid) -> Option<&CredentialField> {
@@ -258,6 +306,74 @@ fn children_mut(nodes: &mut Vec<Node>, parent_id: Option<Uuid>) -> Option<&mut V
             if let Some(children) = children_mut(&mut group.children, Some(parent_id)) {
                 return Some(children);
             }
+        }
+    }
+    None
+}
+
+fn children(nodes: &[Node], parent_id: Option<Uuid>) -> Option<&[Node]> {
+    let Some(parent_id) = parent_id else {
+        return Some(nodes);
+    };
+
+    for node in nodes {
+        if let Node::Group(group) = node {
+            if group.id == parent_id {
+                return Some(&group.children);
+            }
+            if let Some(children) = children(&group.children, Some(parent_id)) {
+                return Some(children);
+            }
+        }
+    }
+    None
+}
+
+fn find_node(nodes: &[Node], node_id: Uuid) -> Option<&Node> {
+    for node in nodes {
+        if node.id() == node_id {
+            return Some(node);
+        }
+        if let Node::Group(group) = node
+            && let Some(found) = find_node(&group.children, node_id)
+        {
+            return Some(found);
+        }
+    }
+    None
+}
+
+fn contains_node(nodes: &[Node], node_id: Uuid) -> bool {
+    find_node(nodes, node_id).is_some()
+}
+
+fn node_location(
+    nodes: &[Node],
+    node_id: Uuid,
+    parent_id: Option<Uuid>,
+) -> Option<(Option<Uuid>, usize)> {
+    for (index, node) in nodes.iter().enumerate() {
+        if node.id() == node_id {
+            return Some((parent_id, index));
+        }
+        if let Node::Group(group) = node
+            && let Some(location) = node_location(&group.children, node_id, Some(group.id))
+        {
+            return Some(location);
+        }
+    }
+    None
+}
+
+fn take_node(nodes: &mut Vec<Node>, node_id: Uuid) -> Option<Node> {
+    if let Some(index) = nodes.iter().position(|node| node.id() == node_id) {
+        return Some(nodes.remove(index));
+    }
+    for node in nodes {
+        if let Node::Group(group) = node
+            && let Some(found) = take_node(&mut group.children, node_id)
+        {
+            return Some(found);
         }
     }
     None
@@ -463,5 +579,49 @@ mod tests {
         let fields = &find_entry(&vault.nodes, entry_id).unwrap().fields;
         assert_eq!(fields[0], original[1]);
         assert_eq!(fields[1], original[0]);
+    }
+
+    #[test]
+    fn moves_nodes_between_groups_and_preserves_requested_order() {
+        let mut vault = VaultData::default();
+        let work = vault.add_group(None, "Work").unwrap();
+        let personal = vault.add_group(None, "Personal").unwrap();
+        let entry = vault
+            .add_entry(Some(work), "Deployment", vec![field("Token", "x", true)])
+            .unwrap();
+        let archive = vault.add_group(Some(personal), "Archive").unwrap();
+
+        vault.move_node(entry, Some(personal), 0).unwrap();
+        vault.move_node(archive, Some(work), 0).unwrap();
+        vault.move_node(personal, None, 0).unwrap();
+
+        let Node::Group(personal_group) = &vault.nodes[0] else {
+            panic!("expected Personal first");
+        };
+        assert_eq!(personal_group.id, personal);
+        assert_eq!(personal_group.children[0].id(), entry);
+        let Node::Group(work_group) = &vault.nodes[1] else {
+            panic!("expected Work second");
+        };
+        assert_eq!(work_group.children[0].id(), archive);
+    }
+
+    #[test]
+    fn rejects_cyclic_and_out_of_bounds_moves_without_mutating_the_vault() {
+        let mut vault = VaultData::default();
+        let parent = vault.add_group(None, "Parent").unwrap();
+        let child = vault.add_group(Some(parent), "Child").unwrap();
+        let original = vault.clone();
+
+        assert_eq!(
+            vault.move_node(parent, Some(child), 0),
+            Err(ModelError::CyclicMove)
+        );
+        assert_eq!(vault, original);
+        assert_eq!(
+            vault.move_node(child, None, 8),
+            Err(ModelError::PositionOutOfBounds)
+        );
+        assert_eq!(vault, original);
     }
 }

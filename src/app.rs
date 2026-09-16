@@ -392,6 +392,19 @@ pub fn delete_node(node_id: Uuid, state: State<'_, AppState>) -> CommandResult<V
 }
 
 #[tauri::command]
+pub fn move_node(
+    node_id: Uuid,
+    parent_id: Option<Uuid>,
+    index: usize,
+    state: State<'_, AppState>,
+) -> CommandResult<VaultView> {
+    command(state.mutate(|data| {
+        data.move_node(node_id, parent_id, index)?;
+        Ok(())
+    }))
+}
+
+#[tauri::command]
 pub fn import_yaml_file(source: String, state: State<'_, AppState>) -> CommandResult<VaultView> {
     command(state.mutate(|data| {
         data.extend_root(import_yaml(&source)?);
