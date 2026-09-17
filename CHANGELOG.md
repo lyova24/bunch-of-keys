@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.0 - 2026-09-17
+
+- Made each displayed field value an accessible copy target and removed the
+  separate copy button.
+- Added brief inline and toast feedback after copying while keeping reveal and
+  edit controls independent.
+
 ## 1.0.0 - 2026-09-16
 
 - Replaced the sidebar and group/entry creation dialogs with one compact

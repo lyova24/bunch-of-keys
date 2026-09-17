@@ -361,9 +361,42 @@ textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in
   border-top: 1px solid var(--border);
 }
 .field-view-row:first-child { border-top: 0; }
-.field-value { display: flex; flex: 1; flex-direction: column; min-width: 0; gap: 2px; }
+.field-value {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  gap: 2px;
+  padding: 5px 8px;
+  overflow: hidden;
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  cursor: copy;
+  text-align: left;
+}
+.field-value:hover { background: var(--accent-soft); }
+.field-value:active { transform: translateY(1px); }
 .field-value small { color: var(--muted); }
 .field-value code { overflow: hidden; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; text-overflow: ellipsis; white-space: nowrap; }
+.field-copy-feedback {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  padding: 3px 7px;
+  background: var(--accent);
+  color: var(--accent-text);
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-50%) scale(.92);
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+.field-value.copied { background: var(--accent-soft); }
+.field-value.copied .field-copy-feedback { opacity: 1; transform: translateY(-50%) scale(1); }
 .masked-value { letter-spacing: 2px; }
 
 .inline-input {

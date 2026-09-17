@@ -1,3 +1,5 @@
+import { copyFieldValue } from './field-copy.js';
+
 const invoke = window.__TAURI__.core.invoke;
 const listen = window.__TAURI__.event.listen;
 const currentWindow = window.__TAURI__.window.getCurrentWindow();
@@ -17,7 +19,6 @@ const ICONS = {
   "chevron-down": '<path d="m6 9 6 6 6-6"/>',
   pencil: '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
   trash: '<path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v5M14 11v5"/>',
-  copy: '<rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
   eye: '<path d="M2.06 12.35a1 1 0 0 1 0-.7C3.73 7.9 7.1 5.5 12 5.5s8.27 2.4 9.94 6.15a1 1 0 0 1 0 .7C20.27 16.1 16.9 18.5 12 18.5s-8.27-2.4-9.94-6.15Z"/><circle cx="12" cy="12" r="3"/>',
   "eye-off": '<path d="m2 2 20 20M10.6 10.6a2 2 0 0 0 2.8 2.8M9.9 4.24A9.8 9.8 0 0 1 12 4c5 0 8.27 2.4 9.94 6.15a1 1 0 0 1 0 .7 11.8 11.8 0 0 1-2.17 3.2M6.61 6.61a11.7 11.7 0 0 0-4.55 5.04 1 1 0 0 0 0 .7C3.73 16.1 7 18.5 12 18.5c1.15 0 2.2-.13 3.16-.37"/>',
   check: '<path d="m20 6-11 11-5-5"/>',
@@ -383,8 +384,11 @@ function renderEntryFields(entry) {
   entry.fields.forEach((field) => {
     const row = document.createElement('div');
     row.className = 'field-view-row';
-    const valueBox = document.createElement('div');
+    const valueBox = document.createElement('button');
+    valueBox.type = 'button';
     valueBox.className = 'field-value';
+    valueBox.setAttribute('aria-label', `Copy ${field.label}`);
+    valueBox.title = `Copy ${field.label}`;
     const label = document.createElement('small');
     label.textContent = field.label;
     const value = document.createElement('code');
@@ -392,7 +396,17 @@ function renderEntryFields(entry) {
     const revealed = revealedFields.get(revealKey);
     value.textContent = field.masked ? (revealed ?? '••••••••••••••••') : (field.value || '—');
     value.classList.toggle('masked-value', field.masked && !revealed);
-    valueBox.append(label, value);
+    const feedback = document.createElement('span');
+    feedback.className = 'field-copy-feedback';
+    feedback.textContent = 'Copied';
+    feedback.setAttribute('aria-hidden', 'true');
+    valueBox.append(label, value, feedback);
+    valueBox.addEventListener('click', () => void copyFieldValue({
+      target: valueBox,
+      copy: () => invoke('copy_field', { entryId: entry.id, fieldId: field.id }),
+      onSuccess: () => notify(`Copied. Clipboard will clear in ${appState.settings.clipboard_clear_seconds} seconds.`),
+      onError: (error) => notify(String(error)),
+    }));
     row.append(valueBox);
     if (field.masked) {
       row.append(iconButton(revealed ? 'eye-off' : 'eye', revealed ? 'Hide value' : 'Reveal value', async () => {
@@ -408,14 +422,6 @@ function renderEntryFields(entry) {
         renderWorkspace();
       }));
     }
-    row.append(iconButton('copy', `Copy ${field.label}`, async () => {
-      try {
-        await invoke('copy_field', { entryId: entry.id, fieldId: field.id });
-        notify(`Copied. Clipboard will clear in ${appState.settings.clipboard_clear_seconds} seconds.`);
-      } catch (error) {
-        notify(String(error));
-      }
-    }));
     fields.append(row);
   });
   return fields;

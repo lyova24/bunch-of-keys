@@ -13,7 +13,7 @@ password recovery, telemetry, or a remote web interface.
 - Arbitrary fields with per-field masking.
 - Authenticated encryption at rest.
 - YAML import with secret-field detection.
-- Copying one field at a time and clearing the clipboard after 30 seconds.
+- Copying a field by clicking its value and clearing the clipboard after 30 seconds.
 - Automatic locking after five minutes of inactivity and on Linux
   screen-lock/suspend signals.
 - Tray operation and optional autostart.
