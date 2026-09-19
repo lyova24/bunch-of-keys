@@ -151,6 +151,7 @@ input, select, textarea, code { user-select: text; }
   outline: 0;
 }
 .chrome-search input::placeholder { color: var(--muted); }
+.chrome-search input:focus::placeholder { color: transparent; }
 
 .chrome-app-actions { gap: 4px; }
 .chrome-app-actions { grid-column: 3; }

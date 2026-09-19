@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.1 - 2026-09-20
+
+- Hid the search placeholder while the field is focused and restored it when
+  the empty field loses focus.
+
 ## 1.1.0 - 2026-09-17
 
 - Made each displayed field value an accessible copy target and removed the
