@@ -86,10 +86,10 @@ pub struct CredentialField {
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum FieldKind {
+    #[serde(alias = "note")]
     Text,
     Secret,
     Url,
-    Note,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -484,6 +484,28 @@ fn zeroize_nodes(nodes: &mut [Node]) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn legacy_note_fields_load_as_text_without_data_loss() {
+        let field: CredentialField = serde_json::from_str(
+            r#"{
+                "id": "f8dd3fbe-e083-49f9-8e4f-6ab405dbfeea",
+                "label": "Recovery notes",
+                "value": "first line\nsecond line",
+                "kind": "note",
+                "masked": false
+            }"#,
+        )
+        .unwrap();
+
+        assert_eq!(field.label, "Recovery notes");
+        assert_eq!(field.value, "first line\nsecond line");
+        assert_eq!(field.kind, FieldKind::Text);
+        assert_eq!(
+            serde_json::to_value(field).unwrap()["kind"],
+            serde_json::json!("text")
+        );
+    }
 
     fn field(label: &str, value: &str, masked: bool) -> FieldInput {
         FieldInput {

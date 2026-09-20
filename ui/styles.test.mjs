@@ -7,6 +7,12 @@ const tauriConfig = JSON.parse(
   await readFile(new URL('../tauri.conf.json', import.meta.url), 'utf8'),
 );
 const markup = await readFile(new URL('./index.html', import.meta.url), 'utf8');
+const app = await readFile(new URL('./app.js', import.meta.url), 'utf8');
+
+test('field type selector contains only distinct field behaviors', () => {
+  assert.match(app, /\['text', 'secret', 'url'\]\.forEach/);
+  assert.doesNotMatch(app, /\['text', 'secret', 'url', 'note'\]/);
+});
 
 test('focused search input hides its placeholder', () => {
   assert.match(
