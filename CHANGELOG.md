@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.5 - 2026-09-20
+
+- Removed the duplicate Note field type while transparently loading legacy
+  Note fields as Text without changing their labels or values.
+
 ## 1.1.4 - 2026-09-20
 
 - Kept the in-app minimize and close controls visible at compact window sizes

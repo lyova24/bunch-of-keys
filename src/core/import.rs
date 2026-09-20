@@ -92,8 +92,6 @@ fn field_from_value(label: String, value: &Value) -> CredentialField {
         && (value.starts_with("http://") || value.starts_with("https://"))
     {
         FieldKind::Url
-    } else if value.contains('\n') {
-        FieldKind::Note
     } else {
         FieldKind::Text
     };
@@ -202,5 +200,17 @@ project:
         };
         assert_eq!(project.children[0].name(), "General");
         assert_eq!(project.children[1].name(), "production");
+    }
+
+    #[test]
+    fn imports_multiline_values_as_text() {
+        let nodes =
+            import_yaml("account:\n  recovery: |\n    first line\n    second line\n").unwrap();
+        let Node::Entry(account) = &nodes[0] else {
+            panic!("account should be an entry");
+        };
+
+        assert_eq!(account.fields[0].kind, FieldKind::Text);
+        assert_eq!(account.fields[0].value, "first line\nsecond line\n");
     }
 }

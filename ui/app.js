@@ -612,7 +612,7 @@ function createFieldEditorRow(field, editor) {
   const kindText = document.createElement('small');
   kindText.textContent = 'Type';
   const kind = document.createElement('select');
-  ['text', 'secret', 'url', 'note'].forEach((name) => {
+  ['text', 'secret', 'url'].forEach((name) => {
     const option = document.createElement('option');
     option.value = name;
     option.textContent = name[0].toUpperCase() + name.slice(1);
