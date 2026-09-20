@@ -95,8 +95,11 @@ async function setWindowLayout(name) {
     if (name === 'setup' || name === 'unlock') {
       const panel = views[name].querySelector('.setup-panel, .unlock-panel');
       const chromeHeight = document.querySelector('.window-chrome').offsetHeight;
+      const frameStyle = getComputedStyle(document.querySelector('#window-frame'));
+      const frameMargins = Number.parseFloat(frameStyle.marginTop)
+        + Number.parseFloat(frameStyle.marginBottom);
       width = 520;
-      height = Math.ceil(panel.scrollHeight + chromeHeight + 16);
+      height = Math.ceil(panel.scrollHeight + chromeHeight + frameMargins);
     }
     await invoke('resize_window', { width, height });
     currentWindowLayout = name;
