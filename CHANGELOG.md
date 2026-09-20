@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.2 - 2026-09-20
+
+- Replaced the square native window shadow with a visible, soft CSS shadow that
+  follows the rounded app surface on light and dark backgrounds and aligned
+  resizing with the visible window edge.
+
 ## 1.1.1 - 2026-09-20
 
 - Hid the search placeholder while the field is focused and restored it when
