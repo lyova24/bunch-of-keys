@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.3.0 - 2026-09-21
+
+- Added structured SSH connection fields and reusable named OpenSSH private
+  keys with encrypted vault storage, safe metadata-only frontend views,
+  reference-preserving rename and replacement, guarded deletion, validation,
+  and backward-compatible schema migration.
+
 ## 1.2.1 - 2026-09-21
 
 - Removed the large standalone logo from the unlock screen and tightened the

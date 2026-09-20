@@ -1,6 +1,7 @@
 # SSH private keys: proposed v2 design
 
-Status: design only; not implemented in version 1.2.0.
+Status: reusable SSH fields and encrypted key storage implemented in version
+1.3.0; connection launching is tracked separately.
 
 ## Recommendation
 

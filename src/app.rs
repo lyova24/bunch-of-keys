@@ -372,6 +372,41 @@ pub fn update_entry(
 }
 
 #[tauri::command]
+pub fn add_ssh_key(
+    name: String,
+    private_key: String,
+    state: State<'_, AppState>,
+) -> CommandResult<VaultView> {
+    let private_key = Zeroizing::new(private_key);
+    command(state.mutate(|data| {
+        data.add_ssh_key(&name, private_key.as_str())?;
+        Ok(())
+    }))
+}
+
+#[tauri::command]
+pub fn update_ssh_key(
+    key_id: Uuid,
+    name: String,
+    private_key: Option<String>,
+    state: State<'_, AppState>,
+) -> CommandResult<VaultView> {
+    let private_key = private_key.map(Zeroizing::new);
+    command(state.mutate(|data| {
+        data.update_ssh_key(key_id, &name, private_key.as_deref().map(String::as_str))?;
+        Ok(())
+    }))
+}
+
+#[tauri::command]
+pub fn delete_ssh_key(key_id: Uuid, state: State<'_, AppState>) -> CommandResult<VaultView> {
+    command(state.mutate(|data| {
+        data.delete_ssh_key(key_id)?;
+        Ok(())
+    }))
+}
+
+#[tauri::command]
 pub fn rename_node(
     node_id: Uuid,
     name: String,
@@ -487,6 +522,7 @@ mod tests {
                         value: "synthetic-test-value".to_owned(),
                         kind: crate::core::FieldKind::Secret,
                         masked: true,
+                        ssh: None,
                     }],
                 )?;
                 Ok(())

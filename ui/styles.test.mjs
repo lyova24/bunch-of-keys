@@ -10,8 +10,19 @@ const markup = await readFile(new URL('./index.html', import.meta.url), 'utf8');
 const app = await readFile(new URL('./app.js', import.meta.url), 'utf8');
 
 test('field type selector contains only distinct field behaviors', () => {
-  assert.match(app, /\['text', 'secret', 'url'\]\.forEach/);
+  assert.match(app, /\['text', 'secret', 'url', 'ssh'\]\.forEach/);
   assert.doesNotMatch(app, /\['text', 'secret', 'url', 'note'\]/);
+});
+
+test('SSH fields use dedicated connection inputs and reusable named keys', () => {
+  assert.match(app, /createSshFieldInputs\(field\.ssh, row\)/);
+  assert.match(app, /user:\s*row\._inputs\.ssh\.user\.value\.trim\(\)/);
+  assert.match(app, /address:\s*row\._inputs\.ssh\.address\.value\.trim\(\)/);
+  assert.match(app, /key_id:\s*row\._inputs\.ssh\.key\.value/);
+  assert.match(markup, /<dialog id="ssh-key-dialog">/);
+  assert.match(markup, /<textarea name="privateKey"[^>]*autocomplete="off"[^>]*spellcheck="false"/);
+  assert.match(styles, /\.ssh-field-inputs\s*\{[^}]*grid-template-columns:/s);
+  assert.match(styles, /@media \(max-width: 520px\)[\s\S]*\.ssh-field-inputs\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);/);
 });
 
 test('theme control exposes all three modes with an accessible selected state', () => {

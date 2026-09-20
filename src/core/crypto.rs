@@ -198,9 +198,9 @@ impl VaultEnvelope {
             )
             .map_err(|_| CryptoError::DamagedPayload)?,
         );
-        let data: VaultData =
+        let mut data: VaultData =
             serde_json::from_slice(&plaintext).map_err(CryptoError::Deserialize)?;
-        data.validate().map_err(|_| CryptoError::DamagedPayload)?;
+        data.migrate().map_err(|_| CryptoError::DamagedPayload)?;
 
         Ok(UnlockedVault {
             envelope: self,
@@ -363,6 +363,7 @@ mod tests {
                 value: "not-a-real-password".to_owned(),
                 kind: FieldKind::Secret,
                 masked: true,
+                ssh: None,
             }],
         )
         .unwrap();

@@ -102,6 +102,7 @@ fn field_from_value(label: String, value: &Value) -> CredentialField {
         value,
         kind,
         masked,
+        ssh: None,
     }
 }
 

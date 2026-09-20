@@ -78,6 +78,7 @@ const views = {
 const dialogs = {
   vault: document.querySelector('#vault-dialog'),
   settings: document.querySelector('#settings-dialog'),
+  sshKey: document.querySelector('#ssh-key-dialog'),
 };
 
 const workspaceTree = document.querySelector('#workspace-tree');
@@ -96,6 +97,7 @@ let draggedDraft = null;
 let nodeDrop = null;
 let nodeDragPreview = null;
 let draggedFieldRow = null;
+let sshKeyTargetRow = null;
 const expandedGroupIds = new Set();
 const expandedEntryIds = new Set();
 const revealedFields = new Map();
@@ -140,7 +142,7 @@ function showView(name) {
 }
 
 function setBusy(container, busy) {
-  container.querySelectorAll('button, input, select').forEach((element) => {
+  container.querySelectorAll('button, input, select, textarea').forEach((element) => {
     element.disabled = busy;
   });
 }
@@ -456,6 +458,22 @@ function renderEntryFields(entry) {
   entry.fields.forEach((field) => {
     const row = document.createElement('div');
     row.className = 'field-view-row';
+    if (field.kind === 'ssh') {
+      const summary = document.createElement('div');
+      summary.className = 'field-value ssh-field-summary';
+      const label = document.createElement('small');
+      label.textContent = field.label;
+      const connection = document.createElement('code');
+      const port = field.ssh.port ? `:${field.ssh.port}` : '';
+      connection.textContent = `${field.ssh.user}@${field.ssh.address}${port}`;
+      const key = document.createElement('small');
+      key.className = 'ssh-key-metadata';
+      key.textContent = `${field.ssh.key.name} · ${field.ssh.key.algorithm} · ${field.ssh.key.fingerprint}`;
+      summary.append(label, connection, key);
+      row.append(summary);
+      fields.append(row);
+      return;
+    }
     const valueBox = document.createElement('button');
     valueBox.type = 'button';
     valueBox.className = 'field-value';
@@ -691,30 +709,97 @@ function createFieldEditorRow(field, editor) {
   });
 
   const label = labeledInput('Label', 'text', field.label ?? '', true);
+  label.wrapper.className = 'field-label-input';
   const value = labeledInput('Value', field.masked ? 'password' : 'text', field.value ?? '', false);
+  value.wrapper.className = 'generic-field-value';
   const kindLabel = document.createElement('label');
+  kindLabel.className = 'field-kind-input';
   const kindText = document.createElement('small');
   kindText.textContent = 'Type';
   const kind = document.createElement('select');
-  ['text', 'secret', 'url'].forEach((name) => {
+  ['text', 'secret', 'url', 'ssh'].forEach((name) => {
     const option = document.createElement('option');
     option.value = name;
-    option.textContent = name[0].toUpperCase() + name.slice(1);
+    option.textContent = name === 'ssh' ? 'SSH' : name[0].toUpperCase() + name.slice(1);
     kind.append(option);
   });
   kind.value = field.kind ?? 'text';
   kindLabel.append(kindText, kind);
+  const ssh = createSshFieldInputs(field.ssh, row);
   let masked = Boolean(field.masked);
-  kind.addEventListener('change', () => {
+  const syncKind = () => {
     masked = kind.value === 'secret';
     value.input.type = masked ? 'password' : 'text';
-  });
+    const isSsh = kind.value === 'ssh';
+    row.classList.toggle('ssh-field-row', isSsh);
+    value.wrapper.hidden = isSsh;
+    ssh.wrapper.hidden = !isSsh;
+  };
+  kind.addEventListener('change', syncKind);
   const actions = document.createElement('div');
   actions.className = 'field-actions';
   actions.append(iconButton('x', 'Remove field', () => row.remove()));
-  row.append(dragHandle, label.wrapper, value.wrapper, kindLabel, actions);
-  row._inputs = { label: label.input, value: value.input, kind, masked: () => masked };
+  row.append(dragHandle, label.wrapper, value.wrapper, kindLabel, actions, ssh.wrapper);
+  row._inputs = {
+    label: label.input,
+    value: value.input,
+    kind,
+    masked: () => masked,
+    ssh,
+  };
+  syncKind();
   return row;
+}
+
+function createSshFieldInputs(connection, row) {
+  const wrapper = document.createElement('div');
+  wrapper.className = 'ssh-field-inputs';
+  const user = labeledInput('User', 'text', connection?.user ?? '', true);
+  const address = labeledInput('Address', 'text', connection?.address ?? '', true);
+  const port = labeledInput('Port (optional)', 'number', connection?.port ?? '', false);
+  port.input.min = '1';
+  port.input.max = '65535';
+  const keyWrapper = document.createElement('label');
+  const keyLabel = document.createElement('small');
+  keyLabel.textContent = 'SSH secret key';
+  const key = document.createElement('select');
+  key.className = 'ssh-key-select';
+  key.dataset.selectedKeyId = connection?.key?.id ?? connection?.key_id ?? '';
+  key.required = true;
+  keyWrapper.append(keyLabel, key);
+  const manage = document.createElement('button');
+  manage.type = 'button';
+  manage.className = 'button secondary compact-button manage-ssh-keys';
+  manage.textContent = 'Manage keys';
+  manage.addEventListener('click', () => openSshKeyManager(row));
+  wrapper.append(user.wrapper, address.wrapper, port.wrapper, keyWrapper, manage);
+  populateSshKeySelect(key, key.dataset.selectedKeyId);
+  return { wrapper, user: user.input, address: address.input, port: port.input, key };
+}
+
+function populateSshKeySelect(select, selected = select.value) {
+  select.replaceChildren();
+  const keys = appState.current?.ssh_keys ?? [];
+  if (!keys.length) {
+    const option = document.createElement('option');
+    option.value = '';
+    option.textContent = 'Add an SSH key first';
+    select.append(option);
+    return;
+  }
+  keys.forEach((sshKey) => {
+    const option = document.createElement('option');
+    option.value = sshKey.id;
+    option.textContent = `${sshKey.name} · ${sshKey.algorithm}`;
+    select.append(option);
+  });
+  select.value = keys.some((sshKey) => sshKey.id === selected) ? selected : keys[0].id;
+}
+
+function syncSshKeySelects() {
+  document.querySelectorAll('.ssh-key-select').forEach((select) => {
+    populateSshKeySelect(select, select.value);
+  });
 }
 
 function clearFieldDropIndicators(editor) {
@@ -769,13 +854,23 @@ function compactButton(text, handler, primary = false) {
 }
 
 function readEditor(editor) {
-  return [...editor.querySelectorAll('.field-editor-row')].map((row) => ({
-    id: row.dataset.fieldId || null,
-    label: row._inputs.label.value.trim(),
-    value: row._inputs.value.value,
-    kind: row._inputs.kind.value,
-    masked: row._inputs.masked(),
-  }));
+  return [...editor.querySelectorAll('.field-editor-row')].map((row) => {
+    const kind = row._inputs.kind.value;
+    const port = row._inputs.ssh.port.value.trim();
+    return {
+      id: row.dataset.fieldId || null,
+      label: row._inputs.label.value.trim(),
+      value: kind === 'ssh' ? '' : row._inputs.value.value,
+      kind,
+      masked: kind === 'ssh' ? false : row._inputs.masked(),
+      ssh: kind === 'ssh' ? {
+        user: row._inputs.ssh.user.value.trim(),
+        address: row._inputs.ssh.address.value.trim(),
+        port: port ? Number(port) : null,
+        key_id: row._inputs.ssh.key.value,
+      } : null,
+    };
+  });
 }
 
 function validateInlineEntry(owner, editor) {
@@ -797,6 +892,14 @@ function validateInlineEntry(owner, editor) {
   if (emptyField >= 0) {
     error.textContent = 'Every field needs a label.';
     editor.querySelectorAll('.field-editor-row')[emptyField]._inputs.label.focus();
+    return null;
+  }
+  const invalidSshField = fields.findIndex((field) => field.kind === 'ssh'
+    && (!field.ssh.user || !field.ssh.address || !field.ssh.key_id
+      || (field.ssh.port !== null && (!Number.isInteger(field.ssh.port) || field.ssh.port < 1 || field.ssh.port > 65535))));
+  if (invalidSshField >= 0) {
+    error.textContent = 'Every SSH field needs a user, address, valid optional port, and named key.';
+    editor.querySelectorAll('.field-editor-row')[invalidSshField]._inputs.ssh.user.focus();
     return null;
   }
   return { name, fields };
@@ -1142,6 +1245,117 @@ workspaceTree.addEventListener('dragend', () => {
   draggedDraft = null;
   removeNodeDragPreview();
   clearNodeDropIndicators();
+});
+
+function resetSshKeyForm() {
+  const form = document.querySelector('#ssh-key-form');
+  form.reset();
+  form.elements.keyId.value = '';
+  form.elements.privateKey.required = true;
+  document.querySelector('#ssh-key-secret-hint').textContent = 'Paste an OpenSSH private key. Its contents stay encrypted inside this vault.';
+  setFormError(form);
+}
+
+function editSshKey(sshKey) {
+  const form = document.querySelector('#ssh-key-form');
+  form.elements.keyId.value = sshKey.id;
+  form.elements.name.value = sshKey.name;
+  form.elements.privateKey.value = '';
+  form.elements.privateKey.required = false;
+  document.querySelector('#ssh-key-secret-hint').textContent = 'Leave the private key blank to keep the current encrypted value.';
+  setFormError(form);
+  form.elements.name.focus();
+  form.elements.name.select();
+}
+
+function renderSshKeyList() {
+  const list = document.querySelector('#ssh-key-list');
+  list.replaceChildren();
+  const keys = appState.current?.ssh_keys ?? [];
+  if (!keys.length) {
+    const empty = document.createElement('p');
+    empty.className = 'muted ssh-key-list-empty';
+    empty.textContent = 'No reusable SSH keys yet.';
+    list.append(empty);
+    return;
+  }
+  keys.forEach((sshKey) => {
+    const item = document.createElement('div');
+    item.className = 'ssh-key-item';
+    const copy = document.createElement('span');
+    copy.className = 'ssh-key-item-copy';
+    const name = document.createElement('strong');
+    name.textContent = sshKey.name;
+    const metadata = document.createElement('small');
+    metadata.textContent = `${sshKey.algorithm} · ${sshKey.fingerprint}${sshKey.encrypted ? ' · encrypted' : ''}`;
+    copy.append(name, metadata);
+    const actions = document.createElement('span');
+    actions.className = 'ssh-key-item-actions';
+    actions.append(
+      iconButton('pencil', `Edit ${sshKey.name}`, () => editSshKey(sshKey)),
+      iconButton('trash', `Delete ${sshKey.name}`, async () => {
+        if (!window.confirm(`Delete SSH key “${sshKey.name}”?`)) return;
+        try {
+          appState.current = await invoke('delete_ssh_key', { keyId: sshKey.id });
+          renderSshKeyList();
+          syncSshKeySelects();
+          resetSshKeyForm();
+        } catch (error) {
+          setFormError(document.querySelector('#ssh-key-form'), String(error));
+        }
+      }),
+    );
+    item.append(copy, actions);
+    list.append(item);
+  });
+}
+
+function openSshKeyManager(targetRow = null) {
+  sshKeyTargetRow = targetRow;
+  resetSshKeyForm();
+  renderSshKeyList();
+  dialogs.sshKey.showModal();
+  document.querySelector('#ssh-key-form').elements.name.focus();
+}
+
+document.querySelector('#ssh-key-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const data = new FormData(form);
+  const keyId = data.get('keyId');
+  const privateKey = data.get('privateKey');
+  if (!keyId && !privateKey.trim()) {
+    setFormError(form, 'Private key is required.');
+    form.elements.privateKey.focus();
+    return;
+  }
+  const existingIds = new Set((appState.current?.ssh_keys ?? []).map((key) => key.id));
+  setFormError(form);
+  setBusy(form, true);
+  try {
+    appState.current = keyId
+      ? await invoke('update_ssh_key', { keyId, name: data.get('name'), privateKey: privateKey.trim() || null })
+      : await invoke('add_ssh_key', { name: data.get('name'), privateKey });
+    const added = appState.current.ssh_keys.find((key) => !existingIds.has(key.id));
+    syncSshKeySelects();
+    if (added && sshKeyTargetRow?.isConnected) {
+      sshKeyTargetRow._inputs.ssh.key.value = added.id;
+    }
+    renderSshKeyList();
+    resetSshKeyForm();
+    notify(keyId ? 'SSH key updated.' : 'SSH key added.');
+  } catch (error) {
+    setFormError(form, String(error));
+  } finally {
+    form.elements.privateKey.value = '';
+    setBusy(form, false);
+  }
+});
+
+document.querySelector('#reset-ssh-key-form').addEventListener('click', resetSshKeyForm);
+dialogs.sshKey.addEventListener('close', () => {
+  sshKeyTargetRow = null;
+  resetSshKeyForm();
 });
 
 async function submitCreateVault(form) {

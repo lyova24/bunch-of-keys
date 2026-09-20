@@ -206,6 +206,28 @@
       </form>
     </dialog>
 
+    <dialog id="ssh-key-dialog">
+      <form id="ssh-key-form" class="dialog-form">
+        <div class="dialog-heading">
+          <h2>SSH keys</h2>
+          <button class="icon-button dialog-close" type="button" aria-label="Close">×</button>
+        </div>
+        <div id="ssh-key-list" class="ssh-key-list" aria-live="polite"></div>
+        <input name="keyId" type="hidden">
+        <label>Key name<input name="name" maxlength="200" autocomplete="off" required></label>
+        <label>
+          Private key
+          <textarea name="privateKey" rows="7" autocomplete="off" spellcheck="false" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"></textarea>
+        </label>
+        <p id="ssh-key-secret-hint" class="muted ssh-key-secret-hint">Paste an OpenSSH private key. Its contents stay encrypted inside this vault.</p>
+        <p class="form-error" role="alert"></p>
+        <div class="dialog-actions">
+          <button id="reset-ssh-key-form" class="button secondary" type="button">New key</button>
+          <button class="button primary" type="submit">Save key</button>
+        </div>
+      </form>
+    </dialog>
+
     <div id="toast" class="toast" role="status" hidden></div>
   </body>
 </html>

@@ -164,6 +164,8 @@ The resulting package is written under `target/release/bundle/deb/`.
 
 ## SSH keys
 
-Private-key support is not implemented in 1.2.0. The proposed design uses a
-short-lived, embedded SSH agent so a private key does not have to be
-materialized as a normal file. See [the proposed v2 SSH key design](docs/SSH_KEYS_V2.md).
+Entries can contain structured SSH fields with a user, address, optional port,
+and a reference to a reusable named OpenSSH private key. Key material is stored
+only inside the encrypted vault; normal frontend payloads contain the key name,
+algorithm, fingerprint, and encrypted status instead. See
+[the SSH key design](docs/SSH_KEYS_V2.md).
