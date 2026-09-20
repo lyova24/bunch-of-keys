@@ -292,6 +292,7 @@ textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; 
   font-weight: 700;
 }
 h1 { margin: 22px 0 8px; font-size: 25px; }
+.unlock-panel h1 { margin-top: 0; }
 h2 { margin: 0; font-size: 18px; }
 h3 { margin: 0; font-size: 15px; }
 p { margin: 0; }

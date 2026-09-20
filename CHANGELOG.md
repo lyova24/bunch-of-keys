@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.1 - 2026-09-21
+
+- Removed the large standalone logo from the unlock screen and tightened the
+  heading spacing while preserving the window-header branding.
+
 ## 1.2.0 - 2026-09-20
 
 - Added System, Light, and Dark appearance modes, persisted the selected mode,

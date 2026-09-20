@@ -26,6 +26,15 @@ test('theme control exposes all three modes with an accessible selected state', 
   assert.match(app, /createThemeController\(\{[\s\S]*matchMedia\('\(prefers-color-scheme: dark\)'\)/);
 });
 
+test('unlock screen omits the standalone logo and closes its former gap', () => {
+  const unlockMarkup = markup.match(/<section id="unlock-view"[\s\S]*?<\/section>/)?.[0] ?? '';
+
+  assert.doesNotMatch(unlockMarkup, /class="brand-mark"/);
+  assert.match(unlockMarkup, /<h1>Unlock vault<\/h1>/);
+  assert.match(styles, /\.unlock-panel h1\s*\{[^}]*margin-top:\s*0;/s);
+  assert.match(markup, /class="window-brand-mark"/);
+});
+
 test('node dragging uses a compact custom preview', () => {
   assert.match(app, /const NODE_DRAG_PREVIEW_SCALE = 1\.05;/);
   assert.match(app, /const NODE_DRAG_PREVIEW_OPACITY = 0\.72;/);
