@@ -102,7 +102,7 @@ input, select, textarea, code { user-select: text; }
 
 .window-chrome {
   display: grid;
-  grid-template-columns: minmax(148px, 1fr) minmax(180px, 1.55fr) auto auto;
+  grid-template-columns: fit-content(220px) minmax(180px, 1fr) auto auto;
   align-items: center;
   flex: none;
   min-height: 64px;
@@ -161,7 +161,9 @@ input, select, textarea, code { user-select: text; }
 
 .chrome-search {
   flex-direction: row;
+  justify-self: center;
   gap: 7px;
+  width: min(100%, 360px);
   min-width: 0;
   height: 36px;
   padding: 0 9px;
@@ -599,10 +601,25 @@ dialog::backdrop { background: light-dark(rgb(19 24 34 / 32%), rgb(0 0 0 / 58%))
 }
 
 @media (max-width: 520px) {
-  .window-chrome { padding-left: 10px; }
-  .window-controls { display: none; }
-  .chrome-app-actions { grid-column: 2; }
-  .window-chrome { grid-template-columns: minmax(120px, 1fr) auto; }
+  .window-chrome {
+    grid-template-columns: minmax(82px, 1fr) auto auto;
+    gap: 4px;
+    padding-left: 10px;
+  }
+  .chrome-app-actions { grid-column: 2; gap: 2px; }
+  .window-controls { display: flex; grid-column: 3; padding-left: 4px; }
+  #lock-button { width: 34px; padding: 0; }
+  #lock-button > span:last-child {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
   .group-header, .entry-header { gap: 5px; }
   .node-actions .icon-button { width: 29px; }
 }

@@ -6,6 +6,7 @@ const styles = await readFile(new URL('./styles.css', import.meta.url), 'utf8');
 const tauriConfig = JSON.parse(
   await readFile(new URL('../tauri.conf.json', import.meta.url), 'utf8'),
 );
+const markup = await readFile(new URL('./index.html', import.meta.url), 'utf8');
 
 test('focused search input hides its placeholder', () => {
   assert.match(
@@ -31,5 +32,31 @@ test('resize handles track the visible window edge', () => {
   assert.match(
     styles,
     /\.resize-nw\s*\{[^}]*top:\s*calc\(var\(--window-gutter\) - 7px\);[^}]*left:\s*calc\(var\(--window-gutter\) - 7px\);/s,
+  );
+});
+
+test('compact header keeps accessible window controls visible', () => {
+  assert.match(
+    styles,
+    /@media \(max-width: 520px\)[\s\S]*\.window-controls\s*\{[^}]*display:\s*flex;[^}]*grid-column:\s*3;/,
+  );
+  assert.doesNotMatch(
+    styles,
+    /@media \(max-width: 520px\)[\s\S]*\.window-controls\s*\{[^}]*display:\s*none;/,
+  );
+  assert.match(
+    markup,
+    /<button id="lock-button"[^>]*aria-label="Lock vault"/,
+  );
+});
+
+test('wide header places search between the vault identity and actions', () => {
+  assert.match(
+    styles,
+    /\.window-chrome\s*\{[^}]*grid-template-columns:\s*fit-content\(220px\) minmax\(180px, 1fr\) auto auto;/s,
+  );
+  assert.match(
+    styles,
+    /\.chrome-search\s*\{[^}]*justify-self:\s*center;[^}]*width:\s*min\(100%, 360px\);/s,
   );
 });

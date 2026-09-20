@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.4 - 2026-09-20
+
+- Kept the in-app minimize and close controls visible at compact window sizes
+  and tightened the header without sacrificing accessible actions.
+- Centered a compact, capped-width search field between the vault identity and
+  the right-side action groups on wide headers.
+
 ## 1.1.3 - 2026-09-20
 
 - Made the configured minimum window dimensions the default size for the vault
