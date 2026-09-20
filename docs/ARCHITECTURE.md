@@ -1,7 +1,7 @@
 # Architecture
 
 This document describes the architecture implemented in `bunch-of-keys`
-1.1.7.
+1.2.0.
 
 ## Components
 
@@ -81,6 +81,13 @@ made.
 Expansion state, search text, the active group, revealed values, and unsaved
 drafts are ephemeral frontend state. They are cleared when the vault locks or
 the user switches sessions.
+
+The selected appearance mode is the exception: `system`, `light`, or `dark` is
+stored in webview local storage. The resolved light or dark appearance is kept
+separate from that preference. A `prefers-color-scheme` listener updates every
+surface immediately while System mode is active and becomes a no-op in either
+explicit mode. Legacy stored `light` and `dark` values remain valid explicit
+preferences.
 
 Only one inline draft or editor is allowed at a time. A new group or entry
 draft initially belongs to the selected parent, but remains a DOM-only object

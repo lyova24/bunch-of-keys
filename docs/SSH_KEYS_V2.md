@@ -1,6 +1,6 @@
 # SSH private keys: proposed v2 design
 
-Status: design only; not implemented in version 1.1.7.
+Status: design only; not implemented in version 1.2.0.
 
 ## Recommendation
 

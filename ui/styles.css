@@ -535,6 +535,27 @@ textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in
 }
 .add-menu button:hover { background: var(--accent-soft); }
 
+.theme-trigger-icon { display: none; }
+#theme-button[data-theme-mode="system"] [data-theme-icon="system"],
+#theme-button[data-theme-mode="light"] [data-theme-icon="light"],
+#theme-button[data-theme-mode="dark"] [data-theme-icon="dark"] { display: block; }
+.theme-menu { width: 218px; }
+.theme-menu button[aria-checked="true"] {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+.theme-option-copy {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  gap: 2px;
+}
+.theme-option-copy strong { font-size: 12px; }
+.theme-option-copy small { color: var(--muted); font-size: 10px; }
+.theme-mode-check { visibility: hidden; color: var(--accent); }
+.theme-menu button[aria-checked="true"] .theme-mode-check { visibility: visible; }
+
 .drop-before::before,
 .drop-after::after {
   position: absolute;

@@ -2,7 +2,7 @@
 
 `bunch-of-keys` is a Linux-first desktop application for keeping small,
 structured collections of credentials encrypted on the local machine. The
-current release is **1.1.7**.
+current release is **1.2.0**.
 
 The application is intentionally local-only. It does not provide cloud sync,
 password recovery, telemetry, or a remote web interface.
@@ -21,7 +21,8 @@ password recovery, telemetry, or a remote web interface.
 - YAML import with automatic secret and URL detection.
 - Configurable inactivity locking, clipboard clearing, and autostart.
 - Automatic locking on supported Linux screen-lock and suspend signals.
-- Light and dark themes, tray operation, and a compact frameless window.
+- System-following, light, and dark themes, tray operation, and a compact
+  frameless window.
 - Debian package output.
 
 All group names, entry names, field labels, and values are encrypted. The local
@@ -75,6 +76,11 @@ The settings dialog controls:
 
 Clipboard clearing is conditional: the application clears the clipboard only
 if it still contains the value copied by `bunch-of-keys`.
+
+The theme menu is available from every application state. `System` follows
+live operating-system appearance changes, while `Light` and `Dark` remain
+fixed until another mode is selected. Existing explicit preferences from older
+versions are preserved.
 
 ## Security design
 
@@ -158,6 +164,6 @@ The resulting package is written under `target/release/bundle/deb/`.
 
 ## SSH keys
 
-Private-key support is not implemented in 1.1.7. The proposed design uses a
+Private-key support is not implemented in 1.2.0. The proposed design uses a
 short-lived, embedded SSH agent so a private key does not have to be
 materialized as a normal file. See [the proposed v2 SSH key design](docs/SSH_KEYS_V2.md).

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.0 - 2026-09-20
+
+- Added System, Light, and Dark appearance modes, persisted the selected mode,
+  followed live operating-system appearance changes in System mode, and kept
+  existing explicit Light and Dark preferences compatible.
+
 ## 1.1.7 - 2026-09-20
 
 - Reflowed group and entry editors at compact window sizes so names, fields,

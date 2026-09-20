@@ -1,12 +1,9 @@
 import { copyFieldValue } from './field-copy.js';
+import { createThemeController } from './theme.js';
 import { DEFAULT_VAULT_WINDOW_SIZE } from './window-layout.js';
 
 const NODE_DRAG_PREVIEW_SCALE = 1.05;
 const NODE_DRAG_PREVIEW_OPACITY = 0.72;
-
-const invoke = window.__TAURI__.core.invoke;
-const listen = window.__TAURI__.event.listen;
-const currentWindow = window.__TAURI__.window.getCurrentWindow();
 
 const ICONS = {
   "key-round": '<path d="m15.5 7.5 2.3 2.3a1 1 0 0 0 1.4 0l1.4-1.4a1 1 0 0 0 0-1.4l-2.3-2.3"/><path d="m21 2-9.6 9.6"/><circle cx="7.5" cy="15.5" r="5.5"/>',
@@ -16,7 +13,9 @@ const ICONS = {
   x: '<path d="M18 6 6 18M6 6l12 12"/>',
   lock: '<rect width="14" height="11" x="5" y="11" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
   settings: '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
-  "sun-moon": '<path d="M12 8a4 4 0 1 0 4 4c0-.6-.13-1.16-.36-1.67A6 6 0 0 1 12 8z"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>',
+  moon: '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"/>',
+  monitor: '<rect width="20" height="14" x="2" y="3" rx="2"/><path d="M8 21h8M12 17v4"/>',
   folder: '<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
   "folder-plus": '<path d="M12 10v6M9 13h6"/><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
   "file-plus": '<path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><path d="M12 18v-6M9 15h6"/>',
@@ -56,6 +55,18 @@ function iconButton(name, label, handler, className = 'icon-button') {
 }
 
 hydrateIcons();
+
+createThemeController({
+  root: document.documentElement,
+  trigger: document.querySelector('#theme-button'),
+  options: [...document.querySelectorAll('[data-theme-mode]')],
+  mediaQuery: matchMedia('(prefers-color-scheme: dark)'),
+  storage: localStorage,
+});
+
+const invoke = window.__TAURI__.core.invoke;
+const listen = window.__TAURI__.event.listen;
+const currentWindow = window.__TAURI__.window.getCurrentWindow();
 
 const views = {
   loading: document.querySelector('#loading-view'),
@@ -1229,29 +1240,6 @@ document.querySelector('#settings-button').addEventListener('click', () => {
   dialogs.settings.showModal();
 });
 
-function applyTheme(theme) {
-  document.documentElement.dataset.theme = theme;
-  const nextTheme = theme === 'dark' ? 'light' : 'dark';
-  document.querySelector('#theme-button').setAttribute('aria-label', `Use ${nextTheme} theme`);
-  try {
-    localStorage.setItem('bunch-of-keys-theme', theme);
-  } catch (_) {
-    // Theme persistence is best-effort in restricted webviews.
-  }
-}
-
-let initialTheme = 'dark';
-try {
-  initialTheme = localStorage.getItem('bunch-of-keys-theme')
-    ?? (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
-} catch (_) {
-  initialTheme = 'dark';
-}
-applyTheme(initialTheme);
-
-document.querySelector('#theme-button').addEventListener('click', () => {
-  applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
-});
 document.querySelector('#lock-button').addEventListener('click', () => invoke('lock_vault'));
 document.querySelector('#minimize-window').addEventListener('click', async () => {
   try { await invoke('minimize_window'); } catch (error) { notify(String(error)); }

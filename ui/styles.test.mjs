@@ -14,6 +14,18 @@ test('field type selector contains only distinct field behaviors', () => {
   assert.doesNotMatch(app, /\['text', 'secret', 'url', 'note'\]/);
 });
 
+test('theme control exposes all three modes with an accessible selected state', () => {
+  for (const mode of ['system', 'light', 'dark']) {
+    assert.match(
+      markup,
+      new RegExp(`role="menuitemradio" aria-checked="false" data-theme-mode="${mode}"`),
+    );
+  }
+  assert.match(markup, /id="theme-button"[^>]*role="button"[^>]*aria-label="Theme: System"[^>]*aria-haspopup="menu"[^>]*aria-expanded="false"[^>]*aria-controls="theme-menu"/);
+  assert.match(styles, /\.theme-menu button\[aria-checked="true"\][^{]*\{[^}]*background:\s*var\(--accent-soft\);/s);
+  assert.match(app, /createThemeController\(\{[\s\S]*matchMedia\('\(prefers-color-scheme: dark\)'\)/);
+});
+
 test('node dragging uses a compact custom preview', () => {
   assert.match(app, /const NODE_DRAG_PREVIEW_SCALE = 1\.05;/);
   assert.match(app, /const NODE_DRAG_PREVIEW_OPACITY = 0\.72;/);
