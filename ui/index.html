@@ -228,6 +228,22 @@
       </form>
     </dialog>
 
+    <dialog id="ssh-passphrase-dialog">
+      <form id="ssh-passphrase-form" class="dialog-form">
+        <div class="dialog-heading">
+          <h2>Unlock SSH key</h2>
+          <button class="icon-button dialog-close" type="button" aria-label="Close">×</button>
+        </div>
+        <p class="muted">Enter the private-key passphrase for this connection. It is kept in memory only for this launch.</p>
+        <label>Key passphrase<input name="passphrase" type="password" autocomplete="off" required></label>
+        <p class="form-error" role="alert"></p>
+        <div class="dialog-actions">
+          <button class="button secondary dialog-close" type="button">Cancel</button>
+          <button class="button primary" type="submit">Connect</button>
+        </div>
+      </form>
+    </dialog>
+
     <div id="toast" class="toast" role="status" hidden></div>
   </body>
 </html>

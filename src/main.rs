@@ -2,6 +2,8 @@
 
 mod app;
 mod core;
+#[cfg(unix)]
+mod ssh_session;
 mod storage;
 mod system_monitor;
 mod view;
@@ -20,6 +22,11 @@ const TRAY_ICON_SIZE: usize = 32;
 const TRAY_ICON_SIZE_U32: u32 = 32;
 
 fn main() {
+    #[cfg(unix)]
+    if let Some(exit_code) = ssh_session::run_terminal_helper_if_requested() {
+        std::process::exit(exit_code);
+    }
+
     let storage = AppStorage::discover().expect("cannot initialize application directories");
     let config = storage
         .load_config()
@@ -55,6 +62,7 @@ fn main() {
             app::import_yaml_file,
             app::reveal_field,
             app::copy_field,
+            app::connect_ssh,
             app::update_settings,
         ])
         .setup(|app| {
@@ -92,7 +100,10 @@ fn setup_tray(app: &tauri::App) -> tauri::Result<()> {
         .on_menu_event(|app, event| match event.id.as_ref() {
             "open" => show_main_window(app),
             "lock" => app::lock_and_notify(app),
-            "quit" => app.exit(0),
+            "quit" => {
+                app::lock_and_notify(app);
+                app.exit(0);
+            }
             _ => {}
         })
         .on_tray_icon_event(|tray, event| {

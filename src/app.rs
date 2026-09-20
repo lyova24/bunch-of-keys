@@ -1,6 +1,7 @@
 #![allow(clippy::needless_pass_by_value)] // Tauri commands deserialize owned IPC arguments.
 
 use std::{
+    collections::HashMap,
     sync::{
         Arc, Mutex,
         atomic::{AtomicU64, Ordering},
@@ -10,6 +11,7 @@ use std::{
 };
 
 use serde::Serialize;
+use ssh_key::PrivateKey;
 use tauri::{AppHandle, Emitter, LogicalSize, Manager, State};
 use tauri_plugin_autostart::ManagerExt;
 use thiserror::Error;
@@ -17,7 +19,10 @@ use uuid::Uuid;
 use zeroize::Zeroizing;
 
 use crate::{
-    core::{FieldInput, UnlockedVault, VaultData, VaultEnvelope, import_yaml},
+    core::{
+        FieldInput, FieldKind, SshConnection, UnlockedVault, VaultData, VaultEnvelope, import_yaml,
+    },
+    ssh_session::{EphemeralAgent, SshSessionError, TerminalLauncher, monitor_terminal},
     storage::{AppConfig, AppStorage, Settings, StorageError, VaultRecord},
     view::VaultView,
 };
@@ -34,6 +39,19 @@ pub struct AppState {
     config: Mutex<AppConfig>,
     session: Mutex<Option<Session>>,
     clipboard_generation: Arc<AtomicU64>,
+    active_ssh: Mutex<HashMap<(Uuid, Uuid), ActiveSshSession>>,
+}
+
+struct ActiveSshSession {
+    id: Uuid,
+    agent: EphemeralAgent,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SshSessionEnded {
+    entry_id: Uuid,
+    field_id: Uuid,
 }
 
 #[derive(Debug, Serialize)]
@@ -77,6 +95,16 @@ enum AppError {
     Clipboard(String),
     #[error("autostart could not be changed: {0}")]
     Autostart(String),
+    #[error("SSH field is incomplete or unavailable")]
+    InvalidSshField,
+    #[error("SSH key passphrase is required")]
+    SshPassphraseRequired,
+    #[error("SSH key passphrase is incorrect")]
+    InvalidSshPassphrase,
+    #[error("this SSH connection is already active")]
+    SshSessionActive,
+    #[error(transparent)]
+    SshSession(#[from] SshSessionError),
 }
 
 type CommandResult<T> = Result<T, String>;
@@ -88,13 +116,26 @@ impl AppState {
             config: Mutex::new(config),
             session: Mutex::new(None),
             clipboard_generation: Arc::new(AtomicU64::new(0)),
+            active_ssh: Mutex::new(HashMap::new()),
         }
     }
 
     pub fn lock(&self) -> bool {
+        self.stop_ssh_sessions();
         self.session
             .lock()
             .is_ok_and(|mut session| session.take().is_some())
+    }
+
+    fn stop_ssh_sessions(&self) {
+        let sessions = self
+            .active_ssh
+            .lock()
+            .map(|mut active| std::mem::take(&mut *active))
+            .unwrap_or_default();
+        for session in sessions.into_values() {
+            session.agent.stop();
+        }
     }
 
     fn bootstrap(&self) -> Result<Bootstrap, AppError> {
@@ -236,6 +277,92 @@ impl AppState {
         Ok(())
     }
 
+    fn connect_ssh(
+        &self,
+        app: AppHandle,
+        entry_id: Uuid,
+        field_id: Uuid,
+        passphrase: Option<&str>,
+    ) -> Result<(), AppError> {
+        let (connection, private_key, key_name) = self.ssh_connection(entry_id, field_id)?;
+        let mut active = self
+            .active_ssh
+            .lock()
+            .map_err(|_| AppError::StateUnavailable)?;
+        active.retain(|_, session| !session.agent.is_finished());
+        if active.contains_key(&(entry_id, field_id)) {
+            return Err(AppError::SshSessionActive);
+        }
+
+        let private_key = unlock_ssh_private_key(private_key.as_str(), passphrase)?;
+
+        let agent = EphemeralAgent::start(private_key, key_name)?;
+        let terminal = TerminalLauncher::detect()?;
+        let child = terminal.launch_ssh(
+            agent.socket_path(),
+            agent.identity_path(),
+            &connection.user,
+            &connection.address,
+            connection.port,
+        )?;
+        let session_key = (entry_id, field_id);
+        let session_id = Uuid::new_v4();
+        let cancel = agent.cancellation_sender();
+        active.insert(
+            session_key,
+            ActiveSshSession {
+                id: session_id,
+                agent,
+            },
+        );
+        drop(active);
+        monitor_terminal(child, cancel, move || {
+            let state = app.state::<AppState>();
+            let ended = state.active_ssh.lock().is_ok_and(|mut active| {
+                if active
+                    .get(&session_key)
+                    .is_some_and(|session| session.id == session_id)
+                {
+                    active.remove(&session_key);
+                    true
+                } else {
+                    false
+                }
+            });
+            if ended {
+                let _ = app.emit("ssh-session-ended", SshSessionEnded { entry_id, field_id });
+            }
+        });
+        Ok(())
+    }
+
+    fn ssh_connection(
+        &self,
+        entry_id: Uuid,
+        field_id: Uuid,
+    ) -> Result<(SshConnection, Zeroizing<String>, String), AppError> {
+        let session = self
+            .session
+            .lock()
+            .map_err(|_| AppError::StateUnavailable)?;
+        let data = session.as_ref().ok_or(AppError::Locked)?.vault.data();
+        let field = data
+            .field(entry_id, field_id)
+            .ok_or(AppError::InvalidSshField)?;
+        if field.kind != FieldKind::Ssh {
+            return Err(AppError::InvalidSshField);
+        }
+        let connection = field.ssh.clone().ok_or(AppError::InvalidSshField)?;
+        let key = data
+            .ssh_key(connection.key_id)
+            .ok_or(AppError::InvalidSshField)?;
+        Ok((
+            connection,
+            Zeroizing::new(key.private_key.clone()),
+            key.name.clone(),
+        ))
+    }
+
     fn save_settings(&self, settings: Settings) -> Result<(), AppError> {
         settings.validate()?;
         let mut config = self.config.lock().map_err(|_| AppError::StateUnavailable)?;
@@ -272,6 +399,20 @@ fn validate_password(password: &[u8]) -> Result<(), AppError> {
         return Err(AppError::WeakPassword);
     }
     Ok(())
+}
+
+fn unlock_ssh_private_key(encoded: &str, passphrase: Option<&str>) -> Result<PrivateKey, AppError> {
+    let parsed =
+        PrivateKey::from_openssh(encoded.as_bytes()).map_err(|_| AppError::InvalidSshField)?;
+    if !parsed.is_encrypted() {
+        return Ok(parsed);
+    }
+    let passphrase = passphrase
+        .filter(|value| !value.is_empty())
+        .ok_or(AppError::SshPassphraseRequired)?;
+    parsed
+        .decrypt(passphrase.as_bytes())
+        .map_err(|_| AppError::InvalidSshPassphrase)
 }
 
 fn command<T>(result: Result<T, AppError>) -> CommandResult<T> {
@@ -462,6 +603,23 @@ pub fn copy_field(entry_id: Uuid, field_id: Uuid, state: State<'_, AppState>) ->
 }
 
 #[tauri::command]
+pub fn connect_ssh(
+    app: AppHandle,
+    entry_id: Uuid,
+    field_id: Uuid,
+    passphrase: Option<String>,
+    state: State<'_, AppState>,
+) -> CommandResult<()> {
+    let passphrase = passphrase.map(Zeroizing::new);
+    command(state.connect_ssh(
+        app,
+        entry_id,
+        field_id,
+        passphrase.as_deref().map(String::as_str),
+    ))
+}
+
+#[tauri::command]
 pub fn update_settings(
     app: AppHandle,
     settings: Settings,
@@ -488,6 +646,7 @@ pub fn lock_and_notify(app: &AppHandle) {
 
 #[cfg(test)]
 mod tests {
+    use ssh_key::{Algorithm, LineEnding, PrivateKey, rand_core::OsRng};
     use tempfile::tempdir;
 
     use super::*;
@@ -496,6 +655,26 @@ mod tests {
     fn accepts_master_passwords_from_eight_characters() {
         assert!(validate_password(b"12345678").is_ok());
         assert!(validate_password(b"1234567").is_err());
+    }
+
+    #[test]
+    fn encrypted_ssh_keys_require_the_correct_in_memory_passphrase() {
+        let encrypted = PrivateKey::random(&mut OsRng, Algorithm::Ed25519)
+            .unwrap()
+            .encrypt(&mut OsRng, b"correct horse")
+            .unwrap()
+            .to_openssh(LineEnding::LF)
+            .unwrap();
+
+        assert!(matches!(
+            unlock_ssh_private_key(encrypted.as_str(), None),
+            Err(AppError::SshPassphraseRequired)
+        ));
+        assert!(matches!(
+            unlock_ssh_private_key(encrypted.as_str(), Some("wrong")),
+            Err(AppError::InvalidSshPassphrase)
+        ));
+        assert!(unlock_ssh_private_key(encrypted.as_str(), Some("correct horse")).is_ok());
     }
 
     #[test]
@@ -541,5 +720,34 @@ mod tests {
             .unlock_vault(first.id, b"a sufficiently long password")
             .unwrap();
         assert_eq!(reopened.nodes.len(), 1);
+    }
+
+    #[test]
+    fn locking_the_vault_stops_active_ephemeral_ssh_agents() {
+        let directory = tempdir().unwrap();
+        let storage = AppStorage::new(
+            directory.path().join("config"),
+            directory.path().join("data"),
+        )
+        .unwrap();
+        let state = AppState::new(storage, AppConfig::default());
+        state
+            .create_vault("Work", b"a sufficiently long password")
+            .unwrap();
+        let key = PrivateKey::random(&mut OsRng, Algorithm::Ed25519).unwrap();
+        let agent = EphemeralAgent::start_for_test(&directory.path().join("runtime"), key).unwrap();
+        let socket = agent.socket_path().to_owned();
+        state.active_ssh.lock().unwrap().insert(
+            (Uuid::new_v4(), Uuid::new_v4()),
+            ActiveSshSession {
+                id: Uuid::new_v4(),
+                agent,
+            },
+        );
+
+        assert!(state.lock());
+
+        assert!(!socket.exists());
+        assert!(state.active_ssh.lock().unwrap().is_empty());
     }
 }

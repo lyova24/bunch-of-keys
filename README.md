@@ -169,3 +169,8 @@ and a reference to a reusable named OpenSSH private key. Key material is stored
 only inside the encrypted vault; normal frontend payloads contain the key name,
 algorithm, fingerprint, and encrypted status instead. See
 [the SSH key design](docs/SSH_KEYS_V2.md).
+
+Saved SSH fields include a **Connect via SSH** action. It launches the system
+OpenSSH client in the preferred terminal through a short-lived, single-key
+agent socket, without exporting the private key to a file, command line,
+environment variable, terminal, or clipboard.

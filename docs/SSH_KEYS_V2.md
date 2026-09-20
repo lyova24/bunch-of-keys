@@ -1,60 +1,55 @@
 # SSH private keys: proposed v2 design
 
-Status: reusable SSH fields and encrypted key storage implemented in version
-1.3.0; connection launching is tracked separately.
+Status: implemented in versions 1.3.0 and 1.4.0.
 
 ## Recommendation
 
-Store SSH private-key material as an encrypted vault field and expose selected
-keys through an embedded SSH agent over a Unix-domain socket. Do not write a
-normal private-key file merely to make OpenSSH consume it.
+SSH private-key material is stored as a reusable encrypted vault object and is
+exposed to OpenSSH through a per-connection in-memory agent. The implementation
+never writes a private-key file.
 
 The agent socket would live under:
 
 ```text
-$XDG_RUNTIME_DIR/bunch-of-keys/agent.sock
+$XDG_RUNTIME_DIR/bunch-of-keys/connection-<random UUID>/agent.sock
 ```
 
-The socket and in-memory agent disappear when the vault locks or the process
-exits. The vault stores:
+Each owner-only socket exposes one selected key and disappears when the terminal
+session exits, after a bounded timeout, when the vault locks, or when the
+process exits. The vault stores:
 
 - the OpenSSH private-key document;
-- an optional import passphrase, or a normalized decrypted key representation;
 - public key, algorithm, comment, and fingerprint metadata;
-- whether agent use requires per-request confirmation;
-- an optional activation timeout.
+- the encrypted OpenSSH document unchanged when the source key has a
+  passphrase.
 
 ## User workflow
 
-1. Import a private key or paste it into an SSH-key entry.
-2. Unlock the vault.
-3. Select `Enable in SSH agent` for one or more keys.
-4. Run one of:
+1. Create or import a named private key from an SSH field editor.
+2. Store an SSH field with user, address, optional port, and the key reference.
+3. Use **Connect via SSH**. Encrypted keys request a masked passphrase in-app.
+4. The app starts an owner-only one-key agent and launches the system `ssh`
+   executable in the preferred terminal with direct arguments,
+   `IdentityAgent=<socket>`, `IdentitiesOnly=yes`, and `ForwardAgent=no`.
+5. The normal OpenSSH host-key and authentication prompts remain interactive.
 
-   ```bash
-   eval "$(bok ssh-env)"
-   bok ssh user@example.com
-   ```
-
-5. The normal OpenSSH client sends signing requests to the agent. Private key
-   bytes are not returned to the client.
-6. Locking the vault closes the agent and zeroizes its loaded keys.
-
-The shell helper is necessary because a tray process cannot retroactively
-change `SSH_AUTH_SOCK` in terminals that are already running.
+`xdg-terminal-exec` is preferred. Known terminal emulators are supported as
+direct-argument fallbacks, and `BUNCH_OF_KEYS_TERMINAL` can select one of those
+executables explicitly. No launcher path uses `sh -c`.
 
 ## Security properties and limitations
 
 An agent prevents accidental private-key file exposure, but any process running
-as the same user can ask an unlocked agent to sign data. This is normal SSH
-agent behavior. The v2 implementation should therefore include:
+as the same user and knowing the unpredictable socket path could ask an active
+agent to sign data. This is normal SSH-agent behavior. The implementation limits
+that exposure with:
 
-- explicit activation rather than automatically loading every stored key;
-- short key lifetimes;
-- optional confirmation for every signature;
-- destination constraints where the OpenSSH agent protocol permits them;
-- socket mode `0600` inside a user-only runtime directory;
-- clear UI showing which keys are currently active.
+- one selected key per socket;
+- explicit user activation and duplicate-launch prevention;
+- a five-minute maximum lifetime and deterministic lock/exit cleanup;
+- socket mode `0600` inside `0700` per-connection directories;
+- disabled SSH forwarding and no private data in argv, environment, clipboard,
+  terminal output, or frontend vault state.
 
 ## Rejected alternatives
 

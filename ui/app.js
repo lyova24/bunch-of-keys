@@ -26,6 +26,7 @@ const ICONS = {
   "eye-off": '<path d="m2 2 20 20M10.6 10.6a2 2 0 0 0 2.8 2.8M9.9 4.24A9.8 9.8 0 0 1 12 4c5 0 8.27 2.4 9.94 6.15a1 1 0 0 1 0 .7 11.8 11.8 0 0 1-2.17 3.2M6.61 6.61a11.7 11.7 0 0 0-4.55 5.04 1 1 0 0 0 0 .7C3.73 16.1 7 18.5 12 18.5c1.15 0 2.2-.13 3.16-.37"/>',
   check: '<path d="m20 6-11 11-5-5"/>',
   upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>',
+  terminal: '<path d="m4 17 6-6-6-6M12 19h8"/>',
   grip: '<circle cx="9" cy="5" r="1" fill="currentColor" stroke="none"/><circle cx="15" cy="5" r="1" fill="currentColor" stroke="none"/><circle cx="9" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="15" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="9" cy="19" r="1" fill="currentColor" stroke="none"/><circle cx="15" cy="19" r="1" fill="currentColor" stroke="none"/>',
 };
 
@@ -79,6 +80,7 @@ const dialogs = {
   vault: document.querySelector('#vault-dialog'),
   settings: document.querySelector('#settings-dialog'),
   sshKey: document.querySelector('#ssh-key-dialog'),
+  sshPassphrase: document.querySelector('#ssh-passphrase-dialog'),
 };
 
 const workspaceTree = document.querySelector('#workspace-tree');
@@ -98,6 +100,7 @@ let nodeDrop = null;
 let nodeDragPreview = null;
 let draggedFieldRow = null;
 let sshKeyTargetRow = null;
+let pendingSshConnection = null;
 const expandedGroupIds = new Set();
 const expandedEntryIds = new Set();
 const revealedFields = new Map();
@@ -470,7 +473,11 @@ function renderEntryFields(entry) {
       key.className = 'ssh-key-metadata';
       key.textContent = `${field.ssh.key.name} · ${field.ssh.key.algorithm} · ${field.ssh.key.fingerprint}`;
       summary.append(label, connection, key);
-      row.append(summary);
+      const connect = iconButton('terminal', 'Connect via SSH', () => void connectViaSsh(entry, field, connect));
+      connect.title = 'Connect via SSH';
+      connect.dataset.sshEntryId = entry.id;
+      connect.dataset.sshFieldId = field.id;
+      row.append(summary, connect);
       fields.append(row);
       return;
     }
@@ -1247,6 +1254,61 @@ workspaceTree.addEventListener('dragend', () => {
   clearNodeDropIndicators();
 });
 
+async function connectViaSsh(entry, field, button, passphrase = null) {
+  button.disabled = true;
+  try {
+    await invoke('connect_ssh', { entryId: entry.id, fieldId: field.id, passphrase });
+    button.title = 'SSH session active';
+    notify(`SSH connection to ${field.ssh.user}@${field.ssh.address} started.`);
+    return true;
+  } catch (error) {
+    if (passphrase === null && String(error).includes('SSH key passphrase is required')) {
+      pendingSshConnection = { entry, field, button };
+      const form = document.querySelector('#ssh-passphrase-form');
+      form.reset();
+      setFormError(form);
+      dialogs.sshPassphrase.showModal();
+      form.elements.passphrase.focus();
+      return false;
+    }
+    notify(String(error));
+    button.disabled = false;
+    return false;
+  }
+}
+
+document.querySelector('#ssh-passphrase-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  if (!pendingSshConnection) return;
+  const launch = pendingSshConnection;
+  const passphrase = form.elements.passphrase.value;
+  setFormError(form);
+  setBusy(form, true);
+  try {
+    await invoke('connect_ssh', {
+      entryId: launch.entry.id,
+      fieldId: launch.field.id,
+      passphrase,
+    });
+    pendingSshConnection = null;
+    dialogs.sshPassphrase.close();
+    launch.button.title = 'SSH session active';
+    notify(`SSH connection to ${launch.field.ssh.user}@${launch.field.ssh.address} started.`);
+  } catch (error) {
+    setFormError(form, String(error));
+  } finally {
+    form.elements.passphrase.value = '';
+    setBusy(form, false);
+  }
+});
+
+dialogs.sshPassphrase.addEventListener('close', () => {
+  document.querySelector('#ssh-passphrase-form').reset();
+  if (pendingSshConnection) pendingSshConnection.button.disabled = false;
+  pendingSshConnection = null;
+});
+
 function resetSshKeyForm() {
   const form = document.querySelector('#ssh-key-form');
   form.reset();
@@ -1490,6 +1552,16 @@ document.addEventListener('keydown', activity);
 await listen('vault-locked', () => {
   enterLockedState();
   notify('Vault locked.');
+});
+
+await listen('ssh-session-ended', ({ payload }) => {
+  const button = [...workspaceTree.querySelectorAll('[data-ssh-entry-id]')].find(
+    (candidate) => candidate.dataset.sshEntryId === payload.entryId
+      && candidate.dataset.sshFieldId === payload.fieldId,
+  );
+  if (!button) return;
+  button.disabled = false;
+  button.title = 'Connect via SSH';
 });
 
 try {

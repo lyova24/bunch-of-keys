@@ -25,6 +25,14 @@ test('SSH fields use dedicated connection inputs and reusable named keys', () =>
   assert.match(styles, /@media \(max-width: 520px\)[\s\S]*\.ssh-field-inputs\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);/);
 });
 
+test('valid SSH fields expose a safe terminal action and masked passphrase prompt', () => {
+  assert.match(app, /iconButton\('terminal', 'Connect via SSH'/);
+  assert.match(app, /invoke\('connect_ssh', \{ entryId: entry\.id, fieldId: field\.id, passphrase \}\)/);
+  assert.match(markup, /<dialog id="ssh-passphrase-dialog">/);
+  assert.match(markup, /<input name="passphrase" type="password" autocomplete="off" required>/);
+  assert.match(app, /form\.elements\.passphrase\.value = '';/);
+});
+
 test('theme control exposes all three modes with an accessible selected state', () => {
   for (const mode of ['system', 'light', 'dark']) {
     assert.match(

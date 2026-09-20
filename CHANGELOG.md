@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.4.0 - 2026-09-21
+
+- Added secure SSH connection launching in the system terminal through a
+  per-connection, owner-only, in-memory SSH agent with direct argument passing,
+  encrypted-key passphrase prompts, bounded lifetime, lock/exit cleanup, and
+  persistent failure output so connection errors remain visible; connection
+  controls now return to their ready state when the terminal closes, and the
+  selected agent key is used consistently across hosts regardless of SSH
+  configuration-specific `IdentityFile` rules.
+
 ## 1.3.0 - 2026-09-21
 
 - Added structured SSH connection fields and reusable named OpenSSH private

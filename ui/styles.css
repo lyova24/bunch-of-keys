@@ -236,6 +236,7 @@ button { color: inherit; }
 .icon-button:hover,
 .window-control:hover,
 .disclosure:hover { background: var(--accent-soft); color: var(--text); }
+.icon-button:disabled { opacity: .5; cursor: wait; }
 .primary-icon { background: var(--accent); color: var(--accent-text); }
 .primary-icon:hover { background: var(--accent); color: var(--accent-text); filter: brightness(1.05); }
 .window-control.close:hover { background: var(--danger); color: white; }

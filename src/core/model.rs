@@ -511,8 +511,9 @@ fn validated_ssh_user(value: &str) -> Result<String, ModelError> {
     let value = value.trim();
     if value.is_empty()
         || value.chars().count() > 255
-        || value.chars().any(char::is_whitespace)
-        || value.contains('@')
+        || !value
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || "_.-".contains(character))
     {
         return Err(ModelError::InvalidSshUser);
     }
@@ -524,8 +525,9 @@ fn validated_ssh_address(value: &str) -> Result<String, ModelError> {
     if value.is_empty()
         || value.chars().count() > 255
         || value.starts_with('-')
-        || value.chars().any(char::is_whitespace)
-        || value.contains(['@', '/'])
+        || !value
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || ".-_:%[]".contains(character))
     {
         return Err(ModelError::InvalidSshAddress);
     }
@@ -709,10 +711,13 @@ fn ssh_key_references(nodes: &[Node], key_id: Uuid) -> Vec<String> {
         match node {
             Node::Group(group) => references.extend(ssh_key_references(&group.children, key_id)),
             Node::Entry(entry) => {
-                references.extend(entry.fields.iter().filter_map(|field| {
-                    (field.ssh.as_ref().is_some_and(|ssh| ssh.key_id == key_id))
-                        .then(|| format!("{} / {}", entry.name, field.label))
-                }));
+                references.extend(
+                    entry
+                        .fields
+                        .iter()
+                        .filter(|field| field.ssh.as_ref().is_some_and(|ssh| ssh.key_id == key_id))
+                        .map(|field| format!("{} / {}", entry.name, field.label)),
+                );
             }
         }
     }
