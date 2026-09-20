@@ -360,6 +360,13 @@ textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in
 .entry-header:active { cursor: grabbing; }
 .node.dragging { opacity: .42; }
 
+.node-drag-preview {
+  position: fixed;
+  z-index: 2000;
+  margin: 0;
+  pointer-events: none;
+}
+
 .disclosure { flex: 0 0 28px; width: 28px; height: 32px; }
 .disclosure .icon { transition: transform 140ms ease; }
 .group-node.collapsed > .group-header .disclosure .icon { transform: rotate(-90deg); }

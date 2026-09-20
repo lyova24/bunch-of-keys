@@ -1,6 +1,9 @@
 import { copyFieldValue } from './field-copy.js';
 import { DEFAULT_VAULT_WINDOW_SIZE } from './window-layout.js';
 
+const NODE_DRAG_PREVIEW_SCALE = 1.05;
+const NODE_DRAG_PREVIEW_OPACITY = 0.72;
+
 const invoke = window.__TAURI__.core.invoke;
 const listen = window.__TAURI__.event.listen;
 const currentWindow = window.__TAURI__.window.getCurrentWindow();
@@ -78,6 +81,7 @@ let toastTimer = null;
 let currentWindowLayout = null;
 let draggedNode = null;
 let nodeDrop = null;
+let nodeDragPreview = null;
 let draggedFieldRow = null;
 const expandedGroupIds = new Set();
 const expandedEntryIds = new Set();
@@ -275,6 +279,37 @@ function configureDraggableHeader(header, node) {
   header.draggable = true;
   header.dataset.dragHeader = '';
   header.setAttribute('aria-label', `Drag ${node.name}`);
+}
+
+function removeNodeDragPreview() {
+  nodeDragPreview?.remove();
+  nodeDragPreview = null;
+}
+
+function createNodeDragPreview(header, clientX, clientY) {
+  removeNodeDragPreview();
+  const rect = header.getBoundingClientRect();
+  const preview = header.cloneNode(true);
+  preview.classList.add('node-drag-preview');
+  preview.removeAttribute('draggable');
+  preview.removeAttribute('aria-label');
+  preview.removeAttribute('data-drag-header');
+  preview.setAttribute('aria-hidden', 'true');
+  preview.querySelectorAll('.disclosure, .node-actions').forEach((element) => element.remove());
+  preview.querySelectorAll('[id]').forEach((element) => element.removeAttribute('id'));
+  preview.style.width = `${rect.width}px`;
+  preview.style.height = `${rect.height}px`;
+  preview.style.background = getComputedStyle(header).background;
+  const displayScale = Math.max(window.devicePixelRatio || 1, 1);
+  preview.style.zoom = String(NODE_DRAG_PREVIEW_SCALE / displayScale);
+  preview.style.opacity = String(NODE_DRAG_PREVIEW_OPACITY);
+  const offsetX = Math.max(0, Math.min(rect.width, clientX - rect.left)) * NODE_DRAG_PREVIEW_SCALE;
+  const offsetY = Math.max(0, Math.min(rect.height, clientY - rect.top)) * NODE_DRAG_PREVIEW_SCALE;
+  preview.style.left = `${clientX - offsetX}px`;
+  preview.style.top = `${clientY - offsetY}px`;
+  document.body.append(preview);
+  nodeDragPreview = preview;
+  return { preview, offsetX, offsetY };
 }
 
 function renderGroup(group, parentPath, parentId, index) {
@@ -950,6 +985,11 @@ workspaceTree.addEventListener('dragstart', (event) => {
   node.classList.add('dragging');
   event.dataTransfer.effectAllowed = 'move';
   event.dataTransfer.setData('text/plain', draggedNode.id);
+  const { preview, offsetX, offsetY } = createNodeDragPreview(header, event.clientX, event.clientY);
+  event.dataTransfer.setDragImage(preview, offsetX, offsetY);
+  requestAnimationFrame(() => {
+    if (nodeDragPreview === preview) removeNodeDragPreview();
+  });
 });
 
 workspaceTree.addEventListener('dragover', (event) => {
@@ -968,6 +1008,7 @@ workspaceTree.addEventListener('drop', (event) => {
 workspaceTree.addEventListener('dragend', () => {
   workspaceTree.querySelector('.dragging')?.classList.remove('dragging');
   draggedNode = null;
+  removeNodeDragPreview();
   clearNodeDropIndicators();
 });
 

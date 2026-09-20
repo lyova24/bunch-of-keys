@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.6 - 2026-09-20
+
+- Replaced oversized group and entry drag snapshots with header-only previews
+  that preserve the row width at 105% of its original size across display
+  scaling levels and retain translucent drag feedback.
+
 ## 1.1.5 - 2026-09-20
 
 - Removed the duplicate Note field type while transparently loading legacy

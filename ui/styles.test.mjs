@@ -14,6 +14,16 @@ test('field type selector contains only distinct field behaviors', () => {
   assert.doesNotMatch(app, /\['text', 'secret', 'url', 'note'\]/);
 });
 
+test('node dragging uses a compact custom preview', () => {
+  assert.match(app, /const NODE_DRAG_PREVIEW_SCALE = 1\.05;/);
+  assert.match(app, /const NODE_DRAG_PREVIEW_OPACITY = 0\.72;/);
+  assert.match(app, /const preview = header\.cloneNode\(true\);/);
+  assert.match(app, /preview\.querySelectorAll\('\.disclosure, \.node-actions'\)/);
+  assert.match(app, /preview\.style\.zoom = String\(NODE_DRAG_PREVIEW_SCALE \/ displayScale\);/);
+  assert.match(app, /dataTransfer\.setDragImage\(preview, offsetX, offsetY\);/);
+  assert.match(styles, /\.node-drag-preview\s*\{[^}]*pointer-events:\s*none;/s);
+});
+
 test('focused search input hides its placeholder', () => {
   assert.match(
     styles,
