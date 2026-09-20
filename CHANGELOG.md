@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.1.7 - 2026-09-20
+
+- Reflowed group and entry editors at compact window sizes so names, fields,
+  status badges, drag controls, and actions remain readable without overflow,
+  allowed unsaved drafts to be dragged directly into their target group, and
+  made the last opened or clicked group the default destination for new drafts
+  until the user clicks outside that group and its entries.
+
 ## 1.1.6 - 2026-09-20
 
 - Replaced oversized group and entry drag snapshots with header-only previews

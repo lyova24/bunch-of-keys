@@ -76,10 +76,12 @@ let appState = {
   current: null,
 };
 let searchQuery = '';
+let activeGroupId = null;
 let autoLockTimer = null;
 let toastTimer = null;
 let currentWindowLayout = null;
 let draggedNode = null;
+let draggedDraft = null;
 let nodeDrop = null;
 let nodeDragPreview = null;
 let draggedFieldRow = null;
@@ -175,6 +177,7 @@ function updateVaultSelect() {
 function enterLockedState() {
   appState.current = null;
   searchQuery = '';
+  activeGroupId = null;
   expandedGroupIds.clear();
   expandedEntryIds.clear();
   revealedFields.clear();
@@ -196,6 +199,7 @@ function enterLockedState() {
 function enterVault(vault) {
   appState.current = vault;
   searchQuery = '';
+  activeGroupId = null;
   expandedGroupIds.clear();
   expandedEntryIds.clear();
   revealedFields.clear();
@@ -226,6 +230,19 @@ function allGroups(nodes, output = [], path = '') {
     allGroups(node.children, output, nextPath);
   });
   return output;
+}
+
+function setActiveGroup(groupId) {
+  const groups = allGroups(appState.current?.nodes ?? []);
+  activeGroupId = groups.some(({ node }) => node.id === groupId) ? groupId : null;
+  workspaceTree.querySelectorAll('.group-node[data-node-id]').forEach((group) => {
+    group.classList.toggle('active-group', group.dataset.nodeId === activeGroupId);
+  });
+  const active = groups.find(({ node }) => node.id === activeGroupId)?.node;
+  const add = document.querySelector('#root-add-menu > summary');
+  const label = active ? `Add inside ${active.name}` : 'Add to vault root';
+  add.setAttribute('aria-label', label);
+  add.title = label;
 }
 
 function nodeMatches(node, query) {
@@ -262,11 +279,15 @@ function countLabel(group) {
 
 function renderWorkspace() {
   if (!appState.current) return;
+  if (activeGroupId && !allGroups(appState.current.nodes).some(({ node }) => node.id === activeGroupId)) {
+    activeGroupId = null;
+  }
   workspaceTree.replaceChildren();
   const visibleNodes = appState.current.nodes.filter((node) => nodeMatches(node, searchQuery));
   visibleNodes.forEach((node, index) => workspaceTree.append(renderNode(node, '', null, index)));
   document.querySelector('#empty-state').hidden = appState.current.nodes.length > 0 || Boolean(searchQuery);
   document.querySelector('#search-empty-state').hidden = !searchQuery || visibleNodes.length > 0;
+  setActiveGroup(activeGroupId);
 }
 
 function renderNode(node, parentPath, parentId, index) {
@@ -295,7 +316,7 @@ function createNodeDragPreview(header, clientX, clientY) {
   preview.removeAttribute('aria-label');
   preview.removeAttribute('data-drag-header');
   preview.setAttribute('aria-hidden', 'true');
-  preview.querySelectorAll('.disclosure, .node-actions').forEach((element) => element.remove());
+  preview.querySelectorAll('.disclosure, .node-actions, .draft-actions').forEach((element) => element.remove());
   preview.querySelectorAll('[id]').forEach((element) => element.removeAttribute('id'));
   preview.style.width = `${rect.width}px`;
   preview.style.height = `${rect.height}px`;
@@ -319,6 +340,7 @@ function renderGroup(group, parentPath, parentId, index) {
   section.dataset.nodeType = 'group';
   section.dataset.parentId = parentId ?? '';
   section.dataset.index = String(index);
+  section.classList.toggle('active-group', activeGroupId === group.id);
 
   const expanded = Boolean(searchQuery) || expandedGroupIds.has(group.id);
   section.classList.toggle('collapsed', !expanded);
@@ -328,6 +350,7 @@ function renderGroup(group, parentPath, parentId, index) {
 
   const disclosure = iconButton('chevron-down', `${expanded ? 'Collapse' : 'Expand'} ${group.name}`, () => {
     if (protectInlineWork()) return;
+    setActiveGroup(group.id);
     if (expandedGroupIds.has(group.id)) expandedGroupIds.delete(group.id);
     else expandedGroupIds.add(group.id);
     renderWorkspace();
@@ -500,9 +523,18 @@ function childrenContainer(parentId) {
 
 function createDraft(kind, parentId) {
   if (protectInlineWork()) return;
-  if (parentId) expandedGroupIds.add(parentId);
+  if (parentId) {
+    expandedGroupIds.add(parentId);
+    setActiveGroup(parentId);
+  }
   renderWorkspace();
-  const container = childrenContainer(parentId);
+  let container = childrenContainer(parentId);
+  if (!container && searchQuery) {
+    searchQuery = '';
+    document.querySelector('#search-input').value = '';
+    renderWorkspace();
+    container = childrenContainer(parentId);
+  }
   if (!container) return;
   const draft = kind === 'group' ? createGroupDraft(parentId) : createEntryDraft(parentId);
   container.append(draft);
@@ -516,6 +548,9 @@ function createGroupDraft(parentId) {
   section.dataset.parentId = parentId ?? '';
   const header = document.createElement('header');
   header.className = 'group-header';
+  header.draggable = true;
+  header.dataset.draftDragHeader = '';
+  header.setAttribute('aria-label', 'Drag new group to choose its parent');
   const spacer = document.createElement('span');
   spacer.className = 'disclosure';
   const symbol = document.createElement('span');
@@ -552,12 +587,15 @@ function createEntryDraft(parentId) {
   article.dataset.parentId = parentId ?? '';
   const path = parentId ? allGroups(appState.current.nodes).find(({ node }) => node.id === parentId)?.path ?? '' : '';
   const header = editorHeader('', path, 'Unsaved draft');
+  header.draggable = true;
+  header.dataset.draftDragHeader = '';
+  header.setAttribute('aria-label', 'Drag new entry to choose its group');
   const editor = createEntryEditor([{ id: null, label: '', value: '', kind: 'text', masked: false }]);
   const footer = editorFooter(article, editor, {
     cancelLabel: 'Cancel',
     saveLabel: 'Save entry',
     onCancel: () => article.remove(),
-    onSave: () => void saveEntryDraft(article, editor, parentId),
+    onSave: () => void saveEntryDraft(article, editor),
   });
   article.append(header, editor, footer);
   return article;
@@ -771,12 +809,16 @@ async function saveGroupDraft(draft) {
   }
 }
 
-async function saveEntryDraft(draft, editor, parentId) {
+async function saveEntryDraft(draft, editor) {
   const data = validateInlineEntry(draft, editor);
   if (!data) return;
   setBusy(draft, true);
   try {
-    appState.current = await invoke('add_entry', { parentId: parentId || null, name: data.name, fields: data.fields });
+    appState.current = await invoke('add_entry', {
+      parentId: draft.dataset.parentId || null,
+      name: data.name,
+      fields: data.fields,
+    });
     renderWorkspace();
     notify(`${data.name} saved.`);
   } catch (error) {
@@ -900,14 +942,23 @@ function savedSiblings(container) {
 }
 
 function setNodeDrop(event) {
-  if (!draggedNode) return false;
-  const draggedElement = document.querySelector(`.node[data-node-id="${draggedNode.id}"]`);
+  if (!draggedNode && !draggedDraft) return false;
+  const draggedElement = draggedDraft?.element
+    ?? document.querySelector(`.node[data-node-id="${draggedNode.id}"]`);
   const hoveredHeader = event.target.closest('.group-header, .entry-header');
   const hoveredContainer = event.target.closest('[data-children]');
   const target = hoveredHeader?.closest('.node[data-node-id]') ?? null;
   clearNodeDropIndicators();
   if (target) {
-    if (target.dataset.nodeId === draggedNode.id || (draggedElement && draggedElement.contains(target))) return false;
+    if (draggedNode && (target.dataset.nodeId === draggedNode.id || (draggedElement && draggedElement.contains(target)))) {
+      return false;
+    }
+    if (draggedDraft) {
+      if (target.dataset.nodeType !== 'group') return false;
+      target.classList.add('drop-inside');
+      nodeDrop = { mode: 'inside', target };
+      return true;
+    }
     const rect = hoveredHeader.getBoundingClientRect();
     const offset = event.clientY - rect.top;
     const inside = target.dataset.nodeType === 'group' && offset >= rect.height * .27 && offset <= rect.height * .73;
@@ -926,6 +977,44 @@ function setNodeDrop(event) {
   container.classList.add('drop-inside');
   nodeDrop = { mode: 'container', container };
   return true;
+}
+
+function updateEntryDraftPath(draft, parentId) {
+  if (draft.dataset.nodeType !== 'entry') return;
+  const nameEditor = draft.querySelector('.entry-name-editor');
+  let path = nameEditor.querySelector('.entry-path');
+  const parentPath = parentId
+    ? allGroups(appState.current.nodes).find(({ node }) => node.id === parentId)?.path ?? ''
+    : '';
+  if (!parentPath) {
+    path?.remove();
+    return;
+  }
+  if (!path) {
+    path = document.createElement('span');
+    path.className = 'entry-path';
+    nameEditor.prepend(path);
+  }
+  path.textContent = `${parentPath}.`;
+}
+
+function commitDraftDrop() {
+  if (!draggedDraft || !nodeDrop) return;
+  let container;
+  if (nodeDrop.mode === 'inside') {
+    container = [...nodeDrop.target.children].find((child) => child.matches('[data-children]'));
+    nodeDrop.target.classList.remove('collapsed');
+  } else if (nodeDrop.mode === 'container') {
+    container = nodeDrop.container;
+  }
+  if (!container) return;
+  const parentId = container.dataset.parentId || null;
+  if (parentId) expandedGroupIds.add(parentId);
+  setActiveGroup(parentId);
+  draggedDraft.element.dataset.parentId = parentId ?? '';
+  container.append(draggedDraft.element);
+  updateEntryDraftPath(draggedDraft.element, parentId);
+  draggedDraft.element.querySelector('[data-name-input]')?.focus();
 }
 
 async function commitNodeDrop() {
@@ -956,21 +1045,51 @@ async function commitNodeDrop() {
 
 workspaceTree.addEventListener('click', (event) => {
   const add = event.target.closest('[data-add-kind]');
-  if (!add) return;
-  const details = add.closest('details');
-  if (details) details.open = false;
-  createDraft(add.dataset.addKind, add.dataset.parentId || null);
+  if (add) {
+    const details = add.closest('details');
+    if (details) details.open = false;
+    createDraft(add.dataset.addKind, add.dataset.parentId || null);
+    return;
+  }
+  const group = event.target.closest('.group-header')?.closest('.group-node[data-node-id]');
+  if (group) {
+    setActiveGroup(group.dataset.nodeId);
+    return;
+  }
+  const activeGroup = [...workspaceTree.querySelectorAll('.group-node[data-node-id]')]
+    .find((candidate) => candidate.dataset.nodeId === activeGroupId);
+  if (activeGroup && !activeGroup.contains(event.target)) {
+    setActiveGroup(null);
+  }
 });
 
 document.querySelector('#root-add-menu').addEventListener('click', (event) => {
   const add = event.target.closest('[data-add-kind]');
   if (!add) return;
   event.currentTarget.open = false;
-  createDraft(add.dataset.addKind, null);
+  createDraft(add.dataset.addKind, activeGroupId);
 });
 
 workspaceTree.addEventListener('dragstart', (event) => {
   if (draggedFieldRow) return;
+  const draftHeader = event.target.closest('[data-draft-drag-header]');
+  if (draftHeader) {
+    if (event.target.closest('button, input, select, label, details, summary')) {
+      event.preventDefault();
+      return;
+    }
+    const draft = draftHeader.closest('.draft');
+    draggedDraft = { element: draft, type: draft.dataset.nodeType };
+    draft.classList.add('dragging');
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', `new-${draggedDraft.type}`);
+    const { preview, offsetX, offsetY } = createNodeDragPreview(draftHeader, event.clientX, event.clientY);
+    event.dataTransfer.setDragImage(preview, offsetX, offsetY);
+    requestAnimationFrame(() => {
+      if (nodeDragPreview === preview) removeNodeDragPreview();
+    });
+    return;
+  }
   if (protectInlineWork()) {
     event.preventDefault();
     return;
@@ -993,21 +1112,23 @@ workspaceTree.addEventListener('dragstart', (event) => {
 });
 
 workspaceTree.addEventListener('dragover', (event) => {
-  if (!draggedNode || !setNodeDrop(event)) return;
+  if ((!draggedNode && !draggedDraft) || !setNodeDrop(event)) return;
   event.preventDefault();
   event.dataTransfer.dropEffect = 'move';
 });
 
 workspaceTree.addEventListener('drop', (event) => {
-  if (!draggedNode || !nodeDrop) return;
+  if ((!draggedNode && !draggedDraft) || !nodeDrop) return;
   event.preventDefault();
-  void commitNodeDrop();
+  if (draggedDraft) commitDraftDrop();
+  else void commitNodeDrop();
   clearNodeDropIndicators();
 });
 
 workspaceTree.addEventListener('dragend', () => {
   workspaceTree.querySelector('.dragging')?.classList.remove('dragging');
   draggedNode = null;
+  draggedDraft = null;
   removeNodeDragPreview();
   clearNodeDropIndicators();
 });

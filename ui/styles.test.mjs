@@ -18,7 +18,7 @@ test('node dragging uses a compact custom preview', () => {
   assert.match(app, /const NODE_DRAG_PREVIEW_SCALE = 1\.05;/);
   assert.match(app, /const NODE_DRAG_PREVIEW_OPACITY = 0\.72;/);
   assert.match(app, /const preview = header\.cloneNode\(true\);/);
-  assert.match(app, /preview\.querySelectorAll\('\.disclosure, \.node-actions'\)/);
+  assert.match(app, /preview\.querySelectorAll\('\.disclosure, \.node-actions, \.draft-actions'\)/);
   assert.match(app, /preview\.style\.zoom = String\(NODE_DRAG_PREVIEW_SCALE \/ displayScale\);/);
   assert.match(app, /dataTransfer\.setDragImage\(preview, offsetX, offsetY\);/);
   assert.match(styles, /\.node-drag-preview\s*\{[^}]*pointer-events:\s*none;/s);
@@ -63,6 +63,44 @@ test('compact header keeps accessible window controls visible', () => {
   assert.match(
     markup,
     /<button id="lock-button"[^>]*aria-label="Lock vault"/,
+  );
+});
+
+test('compact inline editors reflow without collapsing their inputs', () => {
+  assert.match(
+    styles,
+    /@media \(max-width: 520px\)[\s\S]*\.group-node\.draft > \.group-header[\s\S]*grid-template-columns:\s*28px 18px minmax\(0, 1fr\);/,
+  );
+  assert.match(
+    styles,
+    /@media \(max-width: 520px\)[\s\S]*\.entry-node\.editing > \.entry-header[\s\S]*grid-template-columns:\s*18px minmax\(0, 1fr\);/,
+  );
+  assert.match(
+    styles,
+    /@media \(max-width: 520px\)[\s\S]*\.field-editor-row\s*\{\s*grid-template-columns:\s*24px minmax\(0, 1fr\) 30px;/,
+  );
+  assert.match(
+    styles,
+    /@media \(max-width: 520px\)[\s\S]*\.entry-editor-footer\s*\{[^}]*flex-wrap:\s*wrap;/,
+  );
+});
+
+test('unsaved groups and entries can move to a group before saving', () => {
+  assert.match(app, /header\.dataset\.draftDragHeader = '';/);
+  assert.match(app, /function commitDraftDrop\(\)/);
+  assert.match(app, /draggedDraft\.element\.dataset\.parentId = parentId \?\? '';/);
+  assert.match(app, /parentId: draft\.dataset\.parentId \|\| null,/);
+  assert.match(app, /updateEntryDraftPath\(draggedDraft\.element, parentId\);/);
+});
+
+test('the active group becomes the default creation target', () => {
+  assert.match(app, /let activeGroupId = null;/);
+  assert.match(app, /group\.classList\.toggle\('active-group', group\.dataset\.nodeId === activeGroupId\);/);
+  assert.match(app, /createDraft\(add\.dataset\.addKind, activeGroupId\);/);
+  assert.match(app, /if \(activeGroup && !activeGroup\.contains\(event\.target\)\) \{\s*setActiveGroup\(null\);/);
+  assert.match(
+    styles,
+    /\.group-node\.active-group > \.group-header\s*\{[^}]*background:\s*var\(--accent-soft\);[^}]*box-shadow:\s*inset 2px 0 var\(--accent\);/s,
   );
 });
 
