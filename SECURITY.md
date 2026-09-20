@@ -37,10 +37,15 @@ modified file from requesting unreasonable memory or CPU resources.
 - Password strings and cryptographic keys are zeroized on drop where the Rust
   ownership model permits it.
 - Masked values are not sent to the webview until the user explicitly reveals
-  them. Copying a masked field is performed by the Rust backend using IDs.
+  them, and their contents are not included in frontend search. Copying any
+  field is performed by the Rust backend using entry and field IDs.
 - The clipboard is cleared only if it still contains the value written by the
   application, avoiding deletion of unrelated clipboard contents.
+- The configurable inactivity timer and supported Linux screen-lock and
+  suspend signals lock the vault. These desktop signals are best-effort and
+  depend on the session services being available.
 - Closing the window hides it; locking explicitly drops decrypted vault data.
+  Use the tray's `Quit` action to terminate the process.
 - Vault files are written atomically and use mode `0600` on Unix. Application
   directories use mode `0700`.
 
