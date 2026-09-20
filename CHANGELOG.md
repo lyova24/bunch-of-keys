@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.3 - 2026-09-20
+
+- Made the configured minimum window dimensions the default size for the vault
+  workspace while preserving content-based setup and unlock sizing.
+
 ## 1.1.2 - 2026-09-20
 
 - Replaced the square native window shadow with a visible, soft CSS shadow that

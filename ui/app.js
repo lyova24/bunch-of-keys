@@ -1,4 +1,5 @@
 import { copyFieldValue } from './field-copy.js';
+import { DEFAULT_VAULT_WINDOW_SIZE } from './window-layout.js';
 
 const invoke = window.__TAURI__.core.invoke;
 const listen = window.__TAURI__.event.listen;
@@ -90,8 +91,7 @@ async function setWindowLayout(name) {
   if (currentWindowLayout === name) return;
   try {
     await afterNextPaint();
-    let width = 900;
-    let height = 680;
+    let { width, height } = DEFAULT_VAULT_WINDOW_SIZE;
     if (name === 'setup' || name === 'unlock') {
       const panel = views[name].querySelector('.setup-panel, .unlock-panel');
       const chromeHeight = document.querySelector('.window-chrome').offsetHeight;
