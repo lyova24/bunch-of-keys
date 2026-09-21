@@ -62,6 +62,7 @@ fn main() {
             app::import_yaml_file,
             app::reveal_field,
             app::copy_field,
+            app::open_url,
             app::connect_ssh,
             app::update_settings,
         ])

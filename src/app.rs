@@ -2,6 +2,7 @@
 
 use std::{
     collections::HashMap,
+    process::{Command, Stdio},
     sync::{
         Arc, Mutex,
         atomic::{AtomicU64, Ordering},
@@ -93,6 +94,10 @@ enum AppError {
     Import(#[from] crate::core::ImportError),
     #[error("clipboard is unavailable: {0}")]
     Clipboard(String),
+    #[error("URL fields must use http:// or https://")]
+    InvalidUrl,
+    #[error("the system browser could not be opened")]
+    BrowserLaunch,
     #[error("autostart could not be changed: {0}")]
     Autostart(String),
     #[error("SSH field is incomplete or unavailable")]
@@ -277,6 +282,25 @@ impl AppState {
         Ok(())
     }
 
+    fn open_url(&self, entry_id: Uuid, field_id: Uuid) -> Result<(), AppError> {
+        let url = self
+            .session
+            .lock()
+            .map_err(|_| AppError::StateUnavailable)?
+            .as_ref()
+            .ok_or(AppError::Locked)?
+            .vault
+            .data()
+            .field(entry_id, field_id)
+            .filter(|field| field.kind == FieldKind::Url)
+            .map(|field| field.value.trim().to_owned())
+            .ok_or(AppError::InvalidUrl)?;
+        if !valid_external_url(&url) {
+            return Err(AppError::InvalidUrl);
+        }
+        launch_browser(&url)
+    }
+
     fn connect_ssh(
         &self,
         app: AppHandle,
@@ -417,6 +441,35 @@ fn unlock_ssh_private_key(encoded: &str, passphrase: Option<&str>) -> Result<Pri
 
 fn command<T>(result: Result<T, AppError>) -> CommandResult<T> {
     result.map_err(|error| error.to_string())
+}
+
+fn valid_external_url(url: &str) -> bool {
+    let Some(remainder) = url
+        .strip_prefix("https://")
+        .or_else(|| url.strip_prefix("http://"))
+    else {
+        return false;
+    };
+    let authority = remainder.split(['/', '?', '#']).next().unwrap_or_default();
+    !authority.is_empty() && !url.chars().any(char::is_whitespace)
+}
+
+fn launch_browser(url: &str) -> Result<(), AppError> {
+    let spawn = |program: &str, arguments: &[&str]| {
+        Command::new(program)
+            .args(arguments)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+    };
+    match spawn("xdg-open", &[url]) {
+        Ok(_) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => spawn("gio", &["open", url])
+            .map(|_| ())
+            .map_err(|_| AppError::BrowserLaunch),
+        Err(_) => Err(AppError::BrowserLaunch),
+    }
 }
 
 #[tauri::command]
@@ -603,6 +656,11 @@ pub fn copy_field(entry_id: Uuid, field_id: Uuid, state: State<'_, AppState>) ->
 }
 
 #[tauri::command]
+pub fn open_url(entry_id: Uuid, field_id: Uuid, state: State<'_, AppState>) -> CommandResult<()> {
+    command(state.open_url(entry_id, field_id))
+}
+
+#[tauri::command]
 pub fn connect_ssh(
     app: AppHandle,
     entry_id: Uuid,
@@ -655,6 +713,15 @@ mod tests {
     fn accepts_master_passwords_from_eight_characters() {
         assert!(validate_password(b"12345678").is_ok());
         assert!(validate_password(b"1234567").is_err());
+    }
+
+    #[test]
+    fn external_urls_are_limited_to_valid_http_destinations() {
+        assert!(valid_external_url("https://example.com/path"));
+        assert!(valid_external_url("http://localhost:8080"));
+        assert!(!valid_external_url("javascript:alert(1)"));
+        assert!(!valid_external_url("https:///missing-host"));
+        assert!(!valid_external_url("https://example.com/bad path"));
     }
 
     #[test]

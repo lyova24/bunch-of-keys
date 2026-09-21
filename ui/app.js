@@ -101,6 +101,8 @@ let nodeDragPreview = null;
 let draggedFieldRow = null;
 let sshKeyTargetRow = null;
 let pendingSshConnection = null;
+let focusedTreeItemKey = null;
+let keyboardTreeSelection = false;
 const expandedGroupIds = new Set();
 const expandedEntryIds = new Set();
 const revealedFields = new Map();
@@ -194,6 +196,8 @@ function enterLockedState() {
   appState.current = null;
   searchQuery = '';
   activeGroupId = null;
+  focusedTreeItemKey = null;
+  keyboardTreeSelection = false;
   expandedGroupIds.clear();
   expandedEntryIds.clear();
   revealedFields.clear();
@@ -216,6 +220,8 @@ function enterVault(vault) {
   appState.current = vault;
   searchQuery = '';
   activeGroupId = null;
+  focusedTreeItemKey = null;
+  keyboardTreeSelection = false;
   expandedGroupIds.clear();
   expandedEntryIds.clear();
   revealedFields.clear();
@@ -295,6 +301,7 @@ function countLabel(group) {
 
 function renderWorkspace() {
   if (!appState.current) return;
+  const restoreTreeFocus = Boolean(document.activeElement?.closest?.('[data-tree-item]'));
   if (activeGroupId && !allGroups(appState.current.nodes).some(({ node }) => node.id === activeGroupId)) {
     activeGroupId = null;
   }
@@ -304,6 +311,49 @@ function renderWorkspace() {
   document.querySelector('#empty-state').hidden = appState.current.nodes.length > 0 || Boolean(searchQuery);
   document.querySelector('#search-empty-state').hidden = !searchQuery || visibleNodes.length > 0;
   setActiveGroup(activeGroupId);
+  syncTreeTabStop(restoreTreeFocus);
+}
+
+function visibleTreeItems() {
+  return [...workspaceTree.querySelectorAll('[data-tree-item]')].filter(
+    (item) => !item.closest('.group-node.collapsed > .node-children'),
+  );
+}
+
+function syncTreeTabStop(restoreFocus = false) {
+  const items = visibleTreeItems();
+  let focused = items.find((item) => item.dataset.treeKey === focusedTreeItemKey);
+  if (!focused) focused = items[0] ?? null;
+  focusedTreeItemKey = focused?.dataset.treeKey ?? null;
+  items.forEach((item) => { item.tabIndex = item === focused ? 0 : -1; });
+  updateTreeSelectionStyle();
+  if (restoreFocus && focused) focused.focus({ preventScroll: true });
+}
+
+function updateTreeSelectionStyle() {
+  workspaceTree.querySelectorAll('[data-tree-item]').forEach((item) => {
+    item.classList.toggle(
+      'keyboard-selected',
+      keyboardTreeSelection && item.dataset.treeKey === focusedTreeItemKey,
+    );
+  });
+}
+
+function configureTreeItem(element, { key, kind, label, activate, expand, collapse }) {
+  element.dataset.treeItem = '';
+  element.dataset.treeKey = key;
+  element.dataset.treeKind = kind;
+  element.setAttribute('role', 'treeitem');
+  element.setAttribute('aria-label', label);
+  element.tabIndex = -1;
+  element._activateTreeItem = activate;
+  element._expandTreeItem = expand;
+  element._collapseTreeItem = collapse;
+  element.addEventListener('focus', () => {
+    focusedTreeItemKey = key;
+    visibleTreeItems().forEach((item) => { item.tabIndex = item === element ? 0 : -1; });
+    updateTreeSelectionStyle();
+  });
 }
 
 function renderNode(node, parentPath, parentId, index) {
@@ -312,10 +362,16 @@ function renderNode(node, parentPath, parentId, index) {
     : renderEntry(node, parentPath, parentId, index);
 }
 
-function configureDraggableHeader(header, node) {
+function configureDraggableHeader(header, node, expanded, controls) {
   header.draggable = true;
   header.dataset.dragHeader = '';
-  header.setAttribute('aria-label', `Drag ${node.name}`);
+  header.setAttribute('aria-expanded', String(expanded));
+  configureTreeItem(header, {
+    key: `node:${node.id}`,
+    kind: node.type,
+    label: node.name,
+    ...controls,
+  });
 }
 
 function removeNodeDragPreview() {
@@ -362,14 +418,21 @@ function renderGroup(group, parentPath, parentId, index) {
   section.classList.toggle('collapsed', !expanded);
   const header = document.createElement('header');
   header.className = 'group-header';
-  configureDraggableHeader(header, group);
-
-  const disclosure = iconButton('chevron-down', `${expanded ? 'Collapse' : 'Expand'} ${group.name}`, () => {
+  const toggle = () => {
     if (protectInlineWork()) return;
     setActiveGroup(group.id);
     if (expandedGroupIds.has(group.id)) expandedGroupIds.delete(group.id);
     else expandedGroupIds.add(group.id);
     renderWorkspace();
+  };
+  configureDraggableHeader(header, group, expanded, {
+    activate: toggle,
+    expand: expanded ? null : toggle,
+    collapse: expanded && !searchQuery ? toggle : null,
+  });
+
+  const disclosure = iconButton('chevron-down', `${expanded ? 'Collapse' : 'Expand'} ${group.name}`, () => {
+    toggle();
   }, 'disclosure');
   disclosure.setAttribute('aria-expanded', String(expanded));
 
@@ -389,9 +452,14 @@ function renderGroup(group, parentPath, parentId, index) {
     createAddControl(group.id, group.name),
   );
   header.append(disclosure, folder, name, meta, actions);
+  header.addEventListener('click', (event) => {
+    if (event.target.closest('button, input, select, summary, details')) return;
+    toggle();
+  });
 
   const children = document.createElement('div');
   children.className = 'node-children';
+  children.setAttribute('role', 'group');
   children.dataset.children = '';
   children.dataset.parentId = group.id;
   const groupPath = parentPath ? `${parentPath}.${group.name}` : group.name;
@@ -412,7 +480,18 @@ function renderEntry(entry, parentPath, parentId, index) {
 
   const header = document.createElement('header');
   header.className = 'entry-header';
-  configureDraggableHeader(header, entry);
+  const expanded = expandedEntryIds.has(entry.id);
+  const toggle = () => {
+    if (protectInlineWork()) return;
+    if (expandedEntryIds.has(entry.id)) expandedEntryIds.delete(entry.id);
+    else expandedEntryIds.add(entry.id);
+    renderWorkspace();
+  };
+  configureDraggableHeader(header, entry, expanded, {
+    activate: toggle,
+    expand: expanded ? null : toggle,
+    collapse: expanded ? toggle : null,
+  });
   const key = document.createElement('span');
   key.className = 'node-icon';
   key.append(icon('key-round'));
@@ -437,20 +516,18 @@ function renderEntry(entry, parentPath, parentId, index) {
   header.append(key, title, meta, actions);
   header.addEventListener('click', (event) => {
     if (event.target.closest('button, input, select, summary, details')) return;
-    if (protectInlineWork()) return;
-    if (expandedEntryIds.has(entry.id)) expandedEntryIds.delete(entry.id);
-    else expandedEntryIds.add(entry.id);
-    renderWorkspace();
+    toggle();
   });
   article.append(header);
 
-  if (expandedEntryIds.has(entry.id)) article.append(renderEntryFields(entry));
+  if (expanded) article.append(renderEntryFields(entry));
   return article;
 }
 
 function renderEntryFields(entry) {
   const fields = document.createElement('div');
   fields.className = 'entry-fields-view';
+  fields.setAttribute('role', 'group');
   if (!entry.fields.length) {
     const empty = document.createElement('div');
     empty.className = 'field-view-row muted';
@@ -464,6 +541,15 @@ function renderEntryFields(entry) {
     if (field.kind === 'ssh') {
       const summary = document.createElement('div');
       summary.className = 'field-value ssh-field-summary';
+      configureTreeItem(summary, {
+        key: `field:${entry.id}:${field.id}`,
+        kind: 'field',
+        label: `${field.label}, SSH connection`,
+        activate: () => {
+          const connect = row.querySelector('[data-ssh-field-id]');
+          void connectViaSsh(entry, field, connect);
+        },
+      });
       const label = document.createElement('small');
       label.textContent = field.label;
       const connection = document.createElement('code');
@@ -484,8 +570,16 @@ function renderEntryFields(entry) {
     const valueBox = document.createElement('button');
     valueBox.type = 'button';
     valueBox.className = 'field-value';
-    valueBox.setAttribute('aria-label', `Copy ${field.label}`);
-    valueBox.title = `Copy ${field.label}`;
+    valueBox.title = `${field.kind === 'url' ? 'Open' : 'Copy'} ${field.label}`;
+    const activate = field.kind === 'url'
+      ? () => void openFieldUrl(entry, field)
+      : () => void copyEntryField(entry, field, valueBox);
+    configureTreeItem(valueBox, {
+      key: `field:${entry.id}:${field.id}`,
+      kind: 'field',
+      label: `${field.label}, ${field.kind === 'url' ? 'URL' : 'value'}`,
+      activate,
+    });
     const label = document.createElement('small');
     label.textContent = field.label;
     const value = document.createElement('code');
@@ -498,12 +592,7 @@ function renderEntryFields(entry) {
     feedback.textContent = 'Copied';
     feedback.setAttribute('aria-hidden', 'true');
     valueBox.append(label, value, feedback);
-    valueBox.addEventListener('click', () => void copyFieldValue({
-      target: valueBox,
-      copy: () => invoke('copy_field', { entryId: entry.id, fieldId: field.id }),
-      onSuccess: () => notify(`Copied. Clipboard will clear in ${appState.settings.clipboard_clear_seconds} seconds.`),
-      onError: (error) => notify(String(error)),
-    }));
+    valueBox.addEventListener('click', activate);
     row.append(valueBox);
     if (field.masked) {
       row.append(iconButton(revealed ? 'eye-off' : 'eye', revealed ? 'Hide value' : 'Reveal value', async () => {
@@ -522,6 +611,24 @@ function renderEntryFields(entry) {
     fields.append(row);
   });
   return fields;
+}
+
+async function copyEntryField(entry, field, target) {
+  await copyFieldValue({
+    target,
+    copy: () => invoke('copy_field', { entryId: entry.id, fieldId: field.id }),
+    onSuccess: () => notify(`Copied. Clipboard will clear in ${appState.settings.clipboard_clear_seconds} seconds.`),
+    onError: (error) => notify(String(error)),
+  });
+}
+
+async function openFieldUrl(entry, field) {
+  try {
+    await invoke('open_url', { entryId: entry.id, fieldId: field.id });
+    notify('Opened in the system browser.');
+  } catch (error) {
+    notify(String(error));
+  }
 }
 
 function createAddControl(parentId, parentName) {
@@ -1254,6 +1361,36 @@ workspaceTree.addEventListener('dragend', () => {
   clearNodeDropIndicators();
 });
 
+workspaceTree.addEventListener('keydown', (event) => {
+  const item = event.target.closest?.('[data-tree-item]');
+  if (!item || event.target !== item) return;
+  const items = visibleTreeItems();
+  const index = items.indexOf(item);
+  keyboardTreeSelection = true;
+  updateTreeSelectionStyle();
+  if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+    event.preventDefault();
+    const offset = event.key === 'ArrowUp' ? -1 : 1;
+    const next = items[index + offset];
+    if (next) next.focus();
+    return;
+  }
+  if (event.key === 'ArrowRight' && item._expandTreeItem) {
+    event.preventDefault();
+    item._expandTreeItem();
+    return;
+  }
+  if (event.key === 'ArrowLeft' && item._collapseTreeItem) {
+    event.preventDefault();
+    item._collapseTreeItem();
+    return;
+  }
+  if (event.key === 'Enter' && item._activateTreeItem) {
+    event.preventDefault();
+    item._activateTreeItem();
+  }
+});
+
 async function connectViaSsh(entry, field, button, passphrase = null) {
   button.disabled = true;
   try {
@@ -1548,6 +1685,14 @@ document.querySelectorAll('.dialog-close').forEach((button) => {
 });
 document.addEventListener('pointerdown', activity, { passive: true });
 document.addEventListener('keydown', activity);
+document.addEventListener('pointerdown', () => {
+  keyboardTreeSelection = false;
+  document.activeElement?.closest?.('[data-tree-item]')?.blur();
+  updateTreeSelectionStyle();
+}, { passive: true });
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Tab') keyboardTreeSelection = true;
+});
 
 await listen('vault-locked', () => {
   enterLockedState();

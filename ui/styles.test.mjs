@@ -33,6 +33,18 @@ test('valid SSH fields expose a safe terminal action and masked passphrase promp
   assert.match(app, /form\.elements\.passphrase\.value = '';/);
 });
 
+test('vault tree supports mouse disclosure and roving keyboard field actions', () => {
+  assert.match(markup, /id="workspace-tree"[^>]*role="tree"/);
+  assert.match(app, /header\.addEventListener\('click',[\s\S]*?toggle\(\);/);
+  assert.match(app, /event\.key === 'ArrowUp' \|\| event\.key === 'ArrowDown'/);
+  assert.match(app, /event\.key === 'ArrowRight' && item\._expandTreeItem/);
+  assert.match(app, /event\.key === 'ArrowLeft' && item\._collapseTreeItem/);
+  assert.match(app, /event\.key === 'Enter' && item\._activateTreeItem/);
+  assert.match(app, /keyboardTreeSelection = false;[\s\S]*?updateTreeSelectionStyle\(\);/);
+  assert.match(app, /invoke\('open_url', \{ entryId: entry\.id, fieldId: field\.id \}\)/);
+  assert.match(styles, /\.field-value\.keyboard-selected/);
+});
+
 test('theme control exposes all three modes with an accessible selected state', () => {
   for (const mode of ['system', 'light', 'dark']) {
     assert.match(

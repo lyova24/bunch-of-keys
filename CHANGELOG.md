@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.5.0 - 2026-09-21
+
+- Added click-to-toggle group headers and accessible keyboard navigation across
+  visible groups, entries, and expanded fields, including copy, browser, and
+  SSH field activation.
+
 ## 1.4.0 - 2026-09-21
 
 - Added secure SSH connection launching in the system terminal through a
