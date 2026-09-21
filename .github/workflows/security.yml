@@ -1,0 +1,55 @@
+name: Dependency security
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - Cargo.toml
+      - Cargo.lock
+      - .cargo/audit.toml
+      - deny.toml
+      - .github/workflows/security.yml
+  pull_request:
+    paths:
+      - Cargo.toml
+      - Cargo.lock
+      - .cargo/audit.toml
+      - deny.toml
+      - .github/workflows/security.yml
+  schedule:
+    - cron: "23 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  policy:
+    name: Licenses and dependency policy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check licenses, sources, and dependency bans
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check bans licenses sources
+
+  audit:
+    name: RustSec audit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install cargo-audit
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit@0.22.2
+          fallback: none
+      - name: Audit locked dependencies
+        run: cargo audit

@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.5.1 - 2026-09-21
+
+- Added change-aware CI that skips native builds for documentation-only
+  updates, caches Cargo artifacts, and runs locked Rust and UI checks.
+- Added weekly and dependency-change security checks with RustSec auditing,
+  license and source policy enforcement, and grouped Dependabot updates.
+- Added synchronized version validation and a manual Debian artifact build
+  without automatic releases, tags, or package signing.
+
 ## 1.5.0 - 2026-09-21
 
 - Added click-to-toggle group headers and accessible keyboard navigation across

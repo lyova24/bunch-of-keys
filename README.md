@@ -2,7 +2,7 @@
 
 `bunch-of-keys` is a Linux-first desktop application for keeping structured
 credential collections encrypted on the local machine. The current release is
-**1.5.0**.
+**1.5.1**.
 
 The application is intentionally local-only: it has no cloud sync, remote web
 interface, telemetry, account requirement, or password-recovery service.

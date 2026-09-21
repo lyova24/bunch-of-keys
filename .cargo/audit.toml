@@ -1,0 +1,14 @@
+[advisories]
+ignore = [
+  # The application uses RSA only for SSH signatures, not PKCS#1 v1.5
+  # decryption, so the Marvin attack path is not reachable.
+  "RUSTSEC-2023-0071",
+
+  # Tauri 2.11 currently pins these transitive crates below their fixed
+  # releases. The application does not parse untrusted plist/XML documents or
+  # expose cookie parsing to remote content. Keep these exceptions explicit so
+  # every other current or future vulnerability still fails the audit.
+  "RUSTSEC-2026-0009",
+  "RUSTSEC-2026-0194",
+  "RUSTSEC-2026-0195",
+]
