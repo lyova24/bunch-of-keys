@@ -1,6 +1,6 @@
 # SSH private keys: proposed v2 design
 
-Status: implemented in versions 1.3.0 and 1.4.0.
+Status: implemented and current in version 1.5.0.
 
 ## Recommendation
 
@@ -8,15 +8,19 @@ SSH private-key material is stored as a reusable encrypted vault object and is
 exposed to OpenSSH through a per-connection in-memory agent. The implementation
 never writes a private-key file.
 
-The agent socket would live under:
+Each connection uses a private runtime directory containing:
 
 ```text
 $XDG_RUNTIME_DIR/bunch-of-keys/connection-<random UUID>/agent.sock
+$XDG_RUNTIME_DIR/bunch-of-keys/connection-<random UUID>/identity.pub
 ```
 
-Each owner-only socket exposes one selected key and disappears when the terminal
-session exits, after a bounded timeout, when the vault locks, or when the
-process exits. The vault stores:
+`identity.pub` contains only the selected public key and makes that key an
+explicit OpenSSH identity even when host-specific `~/.ssh/config` rules differ.
+The private key remains in memory. Each owner-only socket exposes one selected
+key, and both runtime files disappear when the terminal session exits, after a
+bounded timeout, when the vault locks, or when the process exits. The vault
+stores:
 
 - the OpenSSH private-key document;
 - public key, algorithm, comment, and fingerprint metadata;
@@ -30,8 +34,11 @@ process exits. The vault stores:
 3. Use **Connect via SSH**. Encrypted keys request a masked passphrase in-app.
 4. The app starts an owner-only one-key agent and launches the system `ssh`
    executable in the preferred terminal with direct arguments,
-   `IdentityAgent=<socket>`, `IdentitiesOnly=yes`, and `ForwardAgent=no`.
+   `IdentityAgent=<socket>`, `IdentityFile=<public identity>`,
+   `IdentitiesOnly=yes`, and `ForwardAgent=no`.
 5. The normal OpenSSH host-key and authentication prompts remain interactive.
+   If `ssh` exits with an error, the terminal keeps the original output visible
+   until Enter is pressed.
 
 `xdg-terminal-exec` is preferred. Known terminal emulators are supported as
 direct-argument fallbacks, and `BUNCH_OF_KEYS_TERMINAL` can select one of those
@@ -47,7 +54,8 @@ that exposure with:
 - one selected key per socket;
 - explicit user activation and duplicate-launch prevention;
 - a five-minute maximum lifetime and deterministic lock/exit cleanup;
-- socket mode `0600` inside `0700` per-connection directories;
+- socket and public-identity mode `0600` inside `0700` per-connection
+  directories;
 - disabled SSH forwarding and no private data in argv, environment, clipboard,
   terminal output, or frontend vault state.
 

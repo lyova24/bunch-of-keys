@@ -1,7 +1,7 @@
 # Architecture
 
 This document describes the architecture implemented in `bunch-of-keys`
-1.2.0.
+1.5.0.
 
 ## Components
 
@@ -13,7 +13,7 @@ This document describes the architecture implemented in `bunch-of-keys`
                        │ narrow IPC commands
 ┌──────────────────────▼─────────────────────┐
 │ Linux application service                  │
-│ sessions, clipboard, autostart, D-Bus      │
+│ sessions, clipboard, URL/SSH launch, D-Bus │
 └──────────────────────┬─────────────────────┘
                        │ typed Rust API
 ┌──────────────────────▼─────────────────────┐
@@ -62,9 +62,10 @@ Node
 ```
 
 Each field has a stable UUID, label, value, kind, and masking flag. Current
-field kinds are `text`, `secret`, and `url`. The deserializer accepts the
-retired `note` kind as `text`, which preserves existing vaults without a data
-migration.
+field kinds are `text`, `secret`, `url`, and `ssh`. SSH fields store structured
+connection data and a reference to a reusable named private key in the
+encrypted vault. The deserializer accepts the retired `note` kind as `text`,
+which preserves existing vaults without a data migration.
 
 Tree moves specify the node UUID, target parent group (or the root), and target
 index. The model rejects missing targets, invalid positions, and cyclic group
@@ -78,9 +79,16 @@ contains full values only for non-masked fields. Masked values are represented
 by their ID, label, kind, and mask state until an explicit reveal command is
 made.
 
-Expansion state, search text, the active group, revealed values, and unsaved
-drafts are ephemeral frontend state. They are cleared when the vault locks or
-the user switches sessions.
+Expansion state, search text, the active group, keyboard tree selection,
+revealed values, and unsaved drafts are ephemeral frontend state. They are
+cleared when the vault locks or the user switches sessions.
+
+The visible vault hierarchy is exposed as an accessible tree with one roving
+tab stop. Group headers, entry headers, and fields in expanded entries share a
+single visual-order navigation sequence. Arrow keys move and expand or collapse
+the selection; Enter toggles nodes or dispatches the selected field action.
+Keyboard selection is restored across DOM re-renders and cleared on pointer
+input.
 
 The selected appearance mode is the exception: `system`, `light`, or `dark` is
 stored in webview local storage. The resolved light or dark appearance is kept
