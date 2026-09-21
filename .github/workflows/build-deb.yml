@@ -1,0 +1,72 @@
+name: Build Debian package
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch, tag, or commit to build
+        required: true
+        default: master
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-deb-${{ inputs.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build .deb
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      - name: Check version synchronization
+        run: bash scripts/check-version-sync.sh
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Restore Cargo cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            ~/.cargo/bin
+            target
+          key: ${{ runner.os }}-cargo-deb-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-deb-
+      - name: Install Linux desktop dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libappindicator3-dev libgtk-3-dev libwebkit2gtk-4.1-dev
+      - name: Install Tauri CLI
+        run: cargo install tauri-cli --version '^2' --locked
+      - name: Build Debian package
+        run: cargo tauri build --bundles deb --ci -- --locked
+      - name: Prepare artifact
+        id: artifact
+        run: |
+          version="$(sed -n '/^\[package\]$/,/^\[/s/^version = "\([^"]*\)"/\1/p' Cargo.toml)"
+          package="$(find target/release/bundle/deb -maxdepth 1 -name '*.deb' -print -quit)"
+          test -n "$package"
+          mkdir -p dist
+          artifact="dist/bunch-of-keys_${version}_amd64.deb"
+          cp "$package" "$artifact"
+          sha256sum "$artifact" > "$artifact.sha256"
+          echo "name=bunch-of-keys-${version}-amd64" >> "$GITHUB_OUTPUT"
+          echo "### Debian package" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Ref: \`${{ inputs.ref }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Version: \`$version\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- SHA-256: \`$(cut -d ' ' -f 1 "$artifact.sha256")\`" >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload Debian artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.artifact.outputs.name }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 14
