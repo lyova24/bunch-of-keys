@@ -163,6 +163,34 @@ test('compact inline editors reflow without collapsing their inputs', () => {
   );
 });
 
+test('entry and credential containers expose successive hierarchy indentation', () => {
+  assert.match(styles, /--tree-level-margin:\s*8px;/);
+  assert.match(styles, /--tree-level-padding:\s*5px;/);
+  assert.match(
+    styles,
+    /--tree-level-indent:\s*calc\(var\(--tree-level-margin\) \+ var\(--tree-level-padding\)\);/,
+  );
+  assert.match(
+    styles,
+    /\.node-children\s*\{[^}]*margin:\s*0 0 4px var\(--tree-level-margin\);[^}]*padding-left:\s*var\(--tree-level-padding\);/s,
+  );
+  assert.match(
+    styles,
+    /\.entry-node\s*\{[^}]*margin-left:\s*var\(--tree-level-indent\);/s,
+  );
+  assert.match(
+    styles,
+    /\.entry-fields-view,\s*\.entry-editor\s*\{\s*margin-left:\s*var\(--tree-level-indent\);\s*\}/,
+  );
+  assert.match(styles, /\.field-view-row\s*\{[^}]*padding:\s*6px 8px;/s);
+  assert.doesNotMatch(styles, /\.field-view-row\s*\{[^}]*padding[^;}]*31px/s);
+  assert.doesNotMatch(styles, /\.entry-node \.entry-header\s*\{[^}]*padding-left:/s);
+  assert.match(
+    styles,
+    /@media \(max-width: 760px\)[\s\S]*:root\s*\{[^}]*--tree-level-margin:\s*6px;[^}]*--tree-level-padding:\s*4px;/,
+  );
+});
+
 test('unsaved groups and entries can move to a group before saving', () => {
   assert.match(app, /header\.dataset\.draftDragHeader = '';/);
   assert.match(app, /function commitDraftDrop\(\)/);

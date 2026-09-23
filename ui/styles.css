@@ -20,6 +20,9 @@
   --window-gutter: 18px;
   --window-shadow-near: light-dark(rgb(28 35 50 / 24%), rgb(0 0 0 / 78%));
   --window-shadow-far: light-dark(rgb(28 35 50 / 18%), rgb(0 0 0 / 62%));
+  --tree-level-margin: 8px;
+  --tree-level-padding: 5px;
+  --tree-level-indent: calc(var(--tree-level-margin) + var(--tree-level-padding));
 }
 
 :root[data-theme="light"] { color-scheme: light; }
@@ -344,8 +347,8 @@ textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in
 .workspace-tree { gap: 6px; min-height: 100%; }
 .node-children {
   gap: 4px;
-  margin: 0 0 4px 8px;
-  padding-left: 5px;
+  margin: 0 0 4px var(--tree-level-margin);
+  padding-left: var(--tree-level-padding);
   border-left: 1px solid var(--border);
 }
 .node { position: relative; min-width: 0; }
@@ -406,6 +409,7 @@ textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in
 .node-actions .icon-button { width: 31px; height: 31px; }
 
 .entry-node {
+  margin-left: var(--tree-level-indent);
   overflow: visible;
   background: var(--surface-raised);
   border: 1px solid var(--border);
@@ -418,13 +422,15 @@ textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in
 .name-button { min-width: 0; padding: 0; background: transparent; text-align: left; }
 .name-button:hover { color: var(--accent); }
 
+.entry-fields-view,
+.entry-editor { margin-left: var(--tree-level-indent); }
 .entry-fields-view { border-top: 1px solid var(--border); }
 .field-view-row {
   display: flex;
   align-items: center;
   min-height: 46px;
   gap: 6px;
-  padding: 6px 8px 6px 31px;
+  padding: 6px 8px;
   border-top: 1px solid var(--border);
 }
 .field-view-row:first-child { border-top: 0; }
@@ -668,13 +674,16 @@ dialog::backdrop { background: light-dark(rgb(19 24 34 / 32%), rgb(0 0 0 / 58%))
 }
 
 @media (max-width: 760px) {
+  :root {
+    --tree-level-margin: 6px;
+    --tree-level-padding: 4px;
+  }
   .window-chrome { grid-template-columns: minmax(125px, 1fr) auto auto; gap: 7px; }
   .chrome-search { grid-column: 1 / -1; grid-row: 2; width: 100%; }
   .chrome-app-actions { grid-column: 2; grid-row: 1; }
   .window-controls { grid-column: 3; grid-row: 1; }
   .vault-workspace { padding: 10px; }
   .node-meta { display: none; }
-  .node-children { margin-left: 6px; padding-left: 4px; }
   .field-editor-row { grid-template-columns: 24px minmax(0, .8fr) minmax(0, 1.2fr); }
   .field-editor-row > .field-drag-handle { grid-row: 1 / span 2; }
   .field-editor-row > label:nth-of-type(1) { grid-column: 2; }

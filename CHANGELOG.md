@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.6.1 - 2026-09-24
+
+- Indented entry containers alongside nested groups and applied the same
+  container offset to credentials so parent-child relationships are clear.
+
 ## 1.6.0 - 2026-09-24
 
 - Enabled immediate vault-tree keyboard navigation without an initial click
