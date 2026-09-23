@@ -1,7 +1,7 @@
 # Architecture
 
 This document describes the architecture implemented in `bunch-of-keys`
-1.5.0.
+1.6.1.
 
 ## Components
 
@@ -85,10 +85,18 @@ cleared when the vault locks or the user switches sessions.
 
 The visible vault hierarchy is exposed as an accessible tree with one roving
 tab stop. Group headers, entry headers, and fields in expanded entries share a
-single visual-order navigation sequence. Arrow keys move and expand or collapse
-the selection; Enter toggles nodes or dispatches the selected field action.
-Keyboard selection is restored across DOM re-renders and cleared on pointer
+single visual-order navigation sequence. Entering an unlocked vault focuses
+the current roving tab stop, so arrow-key input works before any pointer input.
+Up and Down move in visual order, Right expands, and Left collapses an expanded
+node or moves from child content to its containing tree item. Enter toggles
+nodes or dispatches the selected field action. Keyboard selection is restored
+across DOM re-renders, rendered as a left-edge accent, and cleared on pointer
 input.
+
+Shared CSS variables define the total horizontal step used by group children,
+entry containers, and credential or editor containers. Compact breakpoints
+change the margin and padding components together so every level remains
+aligned.
 
 The selected appearance mode is the exception: `system`, `light`, or `dark` is
 stored in webview local storage. The resolved light or dark appearance is kept
@@ -103,10 +111,10 @@ until save. Dragging the draft changes its `parentId` and displayed path; the
 backend receives only the final parent when the draft is saved. This prevents
 temporary nodes from being written to the encrypted vault.
 
-The last clicked or expanded group is the active group. The header Add menu
-uses it as the default parent. A click elsewhere in the tree, outside the
-active group and its descendants, restores the root as the default parent.
-This selection is visual UI state and is never persisted.
+The last expanded group is the active group. The header Add menu uses it as the
+default parent. Collapsing that group or one of its ancestors, or clicking
+elsewhere outside the active group and its descendants, restores the root as
+the default parent. This selection is visual UI state and is never persisted.
 
 Saved-node drag-and-drop calls `move_node`, which performs a normal
 transactional mutation. Field drag-and-drop changes editor row order, and that

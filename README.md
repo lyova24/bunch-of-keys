@@ -2,7 +2,7 @@
 
 `bunch-of-keys` is a Linux-first desktop application for keeping structured
 credential collections encrypted on the local machine. The current release is
-**1.5.1**.
+**1.6.1**.
 
 The application is intentionally local-only: it has no cloud sync, remote web
 interface, telemetry, account requirement, or password-recovery service.
@@ -15,7 +15,8 @@ interface, telemetry, account requirement, or password-recovery service.
   direct drag-and-drop reordering.
 - Masked secrets, explicit reveal controls, click-to-copy values, system
   browser URL opening, and secure SSH launching.
-- Full mouse and keyboard navigation across groups, entries, and fields.
+- Immediate mouse and keyboard navigation across groups, entries, and fields,
+  with consistent visual indentation at every hierarchy level.
 - Reorderable `Text`, `Secret`, `URL`, and structured `SSH` fields.
 - Reusable named OpenSSH private keys stored only inside the encrypted vault.
 - YAML import with automatic secret and URL detection.

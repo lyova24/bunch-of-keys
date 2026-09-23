@@ -1,6 +1,6 @@
 # User guide
 
-This guide describes the user-facing behavior in `bunch-of-keys` 1.5.0.
+This guide describes the user-facing behavior in `bunch-of-keys` 1.6.1.
 
 ## Vaults
 
@@ -15,11 +15,12 @@ Groups and entries are collapsed by default. Click a group or entry header to
 show or hide its contents. Only one inline draft or editor can be open at a
 time.
 
-The last group whose header or disclosure control was clicked becomes the
-active group. The header Add menu creates its next group or entry there. A
-click elsewhere in the tree, outside that group and its descendants, clears
-the active group and returns the Add menu target to the vault root. A group's
-own Add menu always targets that group.
+The last group opened through its header or disclosure control becomes the
+active group. The header Add menu creates its next group or entry there.
+Collapsing the active group or one of its ancestors clears that target, as does
+a click elsewhere in the tree outside the group and its descendants. After it
+is cleared, the header Add menu targets the vault root. A group's own Add menu
+always targets that group.
 
 Before saving a new group or entry, drag its header onto another group or the
 root to change its destination. Saved nodes can be dropped before or after
@@ -30,19 +31,30 @@ Entry fields can be reordered by dragging their grip controls while the entry
 is being edited. Vaults created by older versions remain compatible: the
 retired `Note` field type loads as `Text` without changing its label or value.
 
+Every hierarchy level uses the same horizontal step. Entry cards are indented
+as containers alongside nested groups, and their credential containers use one
+matching additional step.
+
 ## Keyboard navigation
 
 The tree exposes a single keyboard selection across visible groups, entries,
-and fields inside expanded entries:
+and fields inside expanded entries. The current tree item receives focus as
+soon as an unlocked vault opens, so navigation does not require an initial
+mouse click:
 
 - `ArrowUp` and `ArrowDown` move in visual order;
 - `ArrowRight` expands the selected group or entry;
-- `ArrowLeft` collapses the selected group or entry;
+- `ArrowLeft` collapses an expanded group or entry; from child content or an
+  already-collapsed item it first moves to the containing entry or group, so a
+  repeated press can collapse that container;
 - `Enter` toggles a selected group or entry;
 - `Enter` on a field performs that field's action.
 
-Keyboard selection has a visible outline and survives tree re-rendering caused
-by expansion or collapse. Switching back to the mouse removes the outline.
+Keyboard selection uses a compact blue indicator on the active row's left edge
+and survives tree re-rendering caused by expansion or collapse. Switching back
+to the mouse removes the keyboard indicator. Non-editable interface text is
+not selectable; normal selection remains available inside text inputs and text
+areas.
 
 ## Field actions
 
