@@ -38,11 +38,25 @@ test('vault tree supports mouse disclosure and roving keyboard field actions', (
   assert.match(app, /header\.addEventListener\('click',[\s\S]*?toggle\(\);/);
   assert.match(app, /event\.key === 'ArrowUp' \|\| event\.key === 'ArrowDown'/);
   assert.match(app, /event\.key === 'ArrowRight' && item\._expandTreeItem/);
-  assert.match(app, /event\.key === 'ArrowLeft' && item\._collapseTreeItem/);
+  assert.match(app, /event\.key === 'ArrowLeft'[\s\S]*?item\._collapseTreeItem[\s\S]*?parentTreeItem\(item\)\?\.focus/);
   assert.match(app, /event\.key === 'Enter' && item\._activateTreeItem/);
+  assert.match(app, /function focusInitialTreeItem\(\)/);
+  assert.match(app, /renderWorkspace\(\);\s*focusInitialTreeItem\(\);\s*scheduleAutoLock\(\);/);
+  assert.match(app, /\['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter'\]\.includes\(event\.key\)/);
   assert.match(app, /keyboardTreeSelection = false;[\s\S]*?updateTreeSelectionStyle\(\);/);
   assert.match(app, /invoke\('open_url', \{ entryId: entry\.id, fieldId: field\.id \}\)/);
-  assert.match(styles, /\.field-value\.keyboard-selected/);
+  assert.match(
+    styles,
+    /\.group-header\.keyboard-selected,[\s\S]*\.field-value\.keyboard-selected\s*\{[^}]*background:\s*var\(--accent-soft\);[^}]*box-shadow:\s*inset 2px 0 var\(--accent\);/s,
+  );
+  assert.doesNotMatch(
+    styles,
+    /\.group-header\.keyboard-selected,[\s\S]*\.field-value\.keyboard-selected\s*\{[^}]*outline:/s,
+  );
+  assert.match(
+    styles,
+    /\[data-tree-item\]:focus,\s*\[data-tree-item\]:focus-visible\s*\{\s*outline:\s*0;\s*\}/,
+  );
 });
 
 test('theme control exposes all three modes with an accessible selected state', () => {
@@ -160,6 +174,7 @@ test('unsaved groups and entries can move to a group before saving', () => {
 test('the active group becomes the default creation target', () => {
   assert.match(app, /let activeGroupId = null;/);
   assert.match(app, /group\.classList\.toggle\('active-group', group\.dataset\.nodeId === activeGroupId\);/);
+  assert.match(app, /const hidesActiveGroup = activeGroupId === group\.id[\s\S]*if \(hidesActiveGroup\) setActiveGroup\(null\);/);
   assert.match(app, /createDraft\(add\.dataset\.addKind, activeGroupId\);/);
   assert.match(app, /if \(activeGroup && !activeGroup\.contains\(event\.target\)\) \{\s*setActiveGroup\(null\);/);
   assert.match(

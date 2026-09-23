@@ -231,6 +231,7 @@ function enterVault(vault) {
   showView('vault');
   void setWindowLayout('vault');
   renderWorkspace();
+  focusInitialTreeItem();
   scheduleAutoLock();
 }
 
@@ -318,6 +319,24 @@ function visibleTreeItems() {
   return [...workspaceTree.querySelectorAll('[data-tree-item]')].filter(
     (item) => !item.closest('.group-node.collapsed > .node-children'),
   );
+}
+
+function parentTreeItem(item) {
+  const node = item.closest('.node');
+  if (!node) return null;
+  const nodeHeader = node.querySelector(':scope > [data-tree-item]');
+  if (nodeHeader && nodeHeader !== item) return nodeHeader;
+  const parentNode = node.parentElement?.closest('.node');
+  return parentNode?.querySelector(':scope > [data-tree-item]') ?? null;
+}
+
+function focusInitialTreeItem() {
+  const item = visibleTreeItems().find(
+    (candidate) => candidate.dataset.treeKey === focusedTreeItemKey,
+  ) ?? visibleTreeItems()[0];
+  if (!item) return false;
+  item.focus({ preventScroll: true });
+  return true;
 }
 
 function syncTreeTabStop(restoreFocus = false) {
@@ -420,9 +439,15 @@ function renderGroup(group, parentPath, parentId, index) {
   header.className = 'group-header';
   const toggle = () => {
     if (protectInlineWork()) return;
-    setActiveGroup(group.id);
-    if (expandedGroupIds.has(group.id)) expandedGroupIds.delete(group.id);
-    else expandedGroupIds.add(group.id);
+    if (expandedGroupIds.has(group.id)) {
+      expandedGroupIds.delete(group.id);
+      const hidesActiveGroup = activeGroupId === group.id
+        || allGroups(group.children).some(({ node }) => node.id === activeGroupId);
+      if (hidesActiveGroup) setActiveGroup(null);
+    } else {
+      expandedGroupIds.add(group.id);
+      setActiveGroup(group.id);
+    }
     renderWorkspace();
   };
   configureDraggableHeader(header, group, expanded, {
@@ -1380,9 +1405,10 @@ workspaceTree.addEventListener('keydown', (event) => {
     item._expandTreeItem();
     return;
   }
-  if (event.key === 'ArrowLeft' && item._collapseTreeItem) {
+  if (event.key === 'ArrowLeft') {
     event.preventDefault();
-    item._collapseTreeItem();
+    if (item._collapseTreeItem) item._collapseTreeItem();
+    else parentTreeItem(item)?.focus({ preventScroll: true });
     return;
   }
   if (event.key === 'Enter' && item._activateTreeItem) {
@@ -1692,6 +1718,19 @@ document.addEventListener('pointerdown', () => {
 }, { passive: true });
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Tab') keyboardTreeSelection = true;
+});
+document.addEventListener('keydown', (event) => {
+  if (
+    event.defaultPrevented
+    || !['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter'].includes(event.key)
+    || !appState.current
+    || event.target.closest?.('[data-tree-item], input, select, textarea, button, summary, [contenteditable="true"]')
+    || Object.values(dialogs).some((dialog) => dialog.open)
+  ) return;
+  if (!focusInitialTreeItem()) return;
+  event.preventDefault();
+  keyboardTreeSelection = true;
+  updateTreeSelectionStyle();
 });
 
 await listen('vault-locked', () => {

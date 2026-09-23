@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.6.0 - 2026-09-24
+
+- Enabled immediate vault-tree keyboard navigation without an initial click
+  and made Left Arrow move from child content to its containing group or entry
+  before a repeated press collapses it; the active row now uses a compact blue
+  indicator on its left edge instead of a surrounding focus frame.
+
 ## 1.5.2 - 2026-09-24
 
 - Disabled text selection throughout the non-editable application interface
