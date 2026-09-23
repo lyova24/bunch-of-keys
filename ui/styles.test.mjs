@@ -83,6 +83,18 @@ test('focused search input hides its placeholder', () => {
   );
 });
 
+test('interface text is not selectable while editable fields remain selectable', () => {
+  assert.match(
+    styles,
+    /\*\s*\{[^}]*user-select:\s*none;[^}]*-webkit-user-select:\s*none;/s,
+  );
+  assert.match(
+    styles,
+    /input,\s*textarea\s*\{[^}]*user-select:\s*text;[^}]*-webkit-user-select:\s*text;/s,
+  );
+  assert.doesNotMatch(styles, /code\s*\{[^}]*user-select:\s*text;/s);
+});
+
 test('rounded app surface owns the window shadow', () => {
   assert.equal(tauriConfig.app.windows[0].shadow, false);
   assert.match(styles, /--window-gutter:\s*18px;/);

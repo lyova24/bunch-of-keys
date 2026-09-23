@@ -25,7 +25,11 @@
 :root[data-theme="light"] { color-scheme: light; }
 :root[data-theme="dark"] { color-scheme: dark; }
 
-* { box-sizing: border-box; }
+* {
+  box-sizing: border-box;
+  user-select: none;
+  -webkit-user-select: none;
+}
 
 html,
 body {
@@ -37,8 +41,11 @@ body {
   color: var(--text);
 }
 
-body { user-select: none; }
-input, select, textarea, code { user-select: text; }
+input,
+textarea {
+  user-select: text;
+  -webkit-user-select: text;
+}
 
 [hidden] { display: none !important; }
 

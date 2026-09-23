@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.5.2 - 2026-09-24
+
+- Disabled text selection throughout the non-editable application interface
+  while preserving normal selection inside text inputs and text areas.
+
 ## 1.5.1 - 2026-09-21
 
 - Added change-aware CI that skips native builds for documentation-only
