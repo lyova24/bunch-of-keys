@@ -79,6 +79,15 @@ contains full values only for non-masked fields. Masked values are represented
 by their ID, label, kind, and mask state until an explicit reveal command is
 made.
 
+Frontend presentation is split by responsibility. `design-system.css` owns
+the color, spacing, radius, control-size, typography, form, menu, dialog, and
+feedback primitives. `styles.css` composes those primitives into the window,
+authentication views, vault tree, inline editors, and responsive layouts.
+`ui-components.js` owns the shared icon registry and small DOM factories,
+while `app.js` remains responsible for application state, rendering, and IPC
+orchestration. This keeps repeated controls consistent without adding a remote
+runtime or build step.
+
 Expansion state, search text, the active group, keyboard tree selection,
 revealed values, and unsaved drafts are ephemeral frontend state. They are
 cleared when the vault locks or the user switches sessions.

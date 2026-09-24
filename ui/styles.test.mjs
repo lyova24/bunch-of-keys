@@ -2,12 +2,25 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-const styles = await readFile(new URL('./styles.css', import.meta.url), 'utf8');
+const appStyles = await readFile(new URL('./styles.css', import.meta.url), 'utf8');
+const designSystem = await readFile(new URL('./design-system.css', import.meta.url), 'utf8');
+const styles = `${designSystem}\n${appStyles}`;
 const tauriConfig = JSON.parse(
   await readFile(new URL('../tauri.conf.json', import.meta.url), 'utf8'),
 );
 const markup = await readFile(new URL('./index.html', import.meta.url), 'utf8');
 const app = await readFile(new URL('./app.js', import.meta.url), 'utf8');
+const components = await readFile(new URL('./ui-components.js', import.meta.url), 'utf8');
+
+test('shared visual primitives and DOM controls live outside the application controller', () => {
+  assert.match(markup, /design-system\.css[\s\S]*styles\.css/);
+  assert.match(designSystem, /--space-1:\s*4px;/);
+  assert.match(designSystem, /--control-height:\s*40px;/);
+  assert.match(app, /from '\.\/ui-components\.js';/);
+  assert.match(components, /export function iconButton/);
+  assert.match(components, /export function labeledInput/);
+  assert.doesNotMatch(app, /const ICONS\s*=/);
+});
 
 test('field type selector contains only distinct field behaviors', () => {
   assert.match(app, /\['text', 'secret', 'url', 'ssh'\]\.forEach/);
@@ -76,7 +89,7 @@ test('unlock screen omits the standalone logo and closes its former gap', () => 
 
   assert.doesNotMatch(unlockMarkup, /class="brand-mark"/);
   assert.match(unlockMarkup, /<h1>Unlock vault<\/h1>/);
-  assert.match(styles, /\.unlock-panel h1\s*\{[^}]*margin-top:\s*0;/s);
+  assert.match(styles, /\.unlock-panel h1\s*\{[^}]*margin:\s*0 0 var\(--space-2\);/s);
   assert.match(markup, /class="window-brand-mark"/);
 });
 
@@ -114,7 +127,7 @@ test('rounded app surface owns the window shadow', () => {
   assert.match(styles, /--window-gutter:\s*18px;/);
   assert.match(
     styles,
-    /#window-frame\s*\{[^}]*box-shadow:\s*0 2px 5px var\(--window-shadow-near\),\s*0 6px 14px var\(--window-shadow-far\);/s,
+    /#window-frame\s*\{[^}]*box-shadow:\s*0 2px 6px var\(--window-shadow-near\),\s*0 10px 28px var\(--window-shadow-far\);/s,
   );
 });
 
@@ -163,6 +176,23 @@ test('compact inline editors reflow without collapsing their inputs', () => {
   );
 });
 
+test('medium inline editors keep label, value, type, and actions on one row', () => {
+  const mediumStart = appStyles.indexOf('@media (max-width: 760px)');
+  const narrowStart = appStyles.indexOf('@media (max-width: 540px)');
+  const mediumStyles = appStyles.slice(mediumStart, narrowStart);
+
+  assert.ok(mediumStart >= 0 && narrowStart > mediumStart);
+  assert.doesNotMatch(mediumStyles, /\.field-editor-row\s*\{/);
+  assert.match(
+    appStyles,
+    /\.field-editor-row\s*\{[^}]*grid-template-columns:\s*24px minmax\(105px, \.75fr\) minmax\(150px, 1\.3fr\) 105px auto;/s,
+  );
+  assert.match(
+    appStyles,
+    /@media \(max-width: 540px\)[\s\S]*\.field-editor-row\s*\{\s*grid-template-columns:\s*24px minmax\(0, \.8fr\) minmax\(0, 1\.2fr\);/,
+  );
+});
+
 test('entry and credential containers expose successive hierarchy indentation', () => {
   assert.match(styles, /--tree-level-margin:\s*8px;/);
   assert.match(styles, /--tree-level-padding:\s*5px;/);
@@ -172,7 +202,7 @@ test('entry and credential containers expose successive hierarchy indentation', 
   );
   assert.match(
     styles,
-    /\.node-children\s*\{[^}]*margin:\s*0 0 4px var\(--tree-level-margin\);[^}]*padding-left:\s*var\(--tree-level-padding\);/s,
+    /\.node-children\s*\{[^}]*margin:\s*2px 0 6px var\(--tree-level-margin\);[^}]*padding-left:\s*var\(--tree-level-padding\);/s,
   );
   assert.match(
     styles,
@@ -182,7 +212,7 @@ test('entry and credential containers expose successive hierarchy indentation', 
     styles,
     /\.entry-fields-view,\s*\.entry-editor\s*\{\s*margin-left:\s*var\(--tree-level-indent\);\s*\}/,
   );
-  assert.match(styles, /\.field-view-row\s*\{[^}]*padding:\s*6px 8px;/s);
+  assert.match(styles, /\.field-view-row\s*\{[^}]*padding:\s*7px 9px;/s);
   assert.doesNotMatch(styles, /\.field-view-row\s*\{[^}]*padding[^;}]*31px/s);
   assert.doesNotMatch(styles, /\.entry-node \.entry-header\s*\{[^}]*padding-left:/s);
   assert.match(
@@ -219,5 +249,16 @@ test('wide header places search between the vault identity and actions', () => {
   assert.match(
     styles,
     /\.chrome-search\s*\{[^}]*justify-self:\s*center;[^}]*width:\s*min\(100%, 360px\);/s,
+  );
+});
+
+test('empty vault and search states stay centered inside the visible workspace', () => {
+  assert.match(
+    styles,
+    /\.vault-workspace\s*\{[^}]*position:\s*relative;[^}]*overflow:\s*auto;/s,
+  );
+  assert.match(
+    styles,
+    /\.empty-state\s*\{[^}]*position:\s*absolute;[^}]*inset:\s*0;[^}]*justify-content:\s*center;/s,
   );
 });
