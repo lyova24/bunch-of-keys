@@ -35,6 +35,7 @@ const SSH_AGENT_RSA_SHA2_512: u32 = 4;
 
 #[derive(Debug, Error)]
 pub enum SshSessionError {
+    #[cfg(target_os = "linux")]
     #[error("XDG_RUNTIME_DIR is unavailable; cannot create a private SSH agent socket")]
     RuntimeDirectoryUnavailable,
     #[error("cannot prepare the private SSH agent runtime directory")]
