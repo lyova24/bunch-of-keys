@@ -3,7 +3,10 @@ use std::{
     ffi::{OsStr, OsString},
     fs,
     io::{self, Write},
-    os::unix::fs::PermissionsExt,
+    os::unix::{
+        ffi::OsStrExt,
+        fs::{DirBuilderExt, PermissionsExt},
+    },
     path::{Path, PathBuf},
     process::{Child, Command, Stdio},
     sync::Arc,
@@ -172,9 +175,17 @@ impl EphemeralAgent {
         fs::create_dir_all(&root).map_err(|_| SshSessionError::RuntimeDirectory)?;
         fs::set_permissions(&root, fs::Permissions::from_mode(0o700))
             .map_err(|_| SshSessionError::RuntimeDirectory)?;
-        let session_dir = root.join(format!("connection-{}", Uuid::new_v4()));
-        fs::create_dir(&session_dir).map_err(|_| SshSessionError::RuntimeDirectory)?;
-        fs::set_permissions(&session_dir, fs::Permissions::from_mode(0o700))
+        let session_id = Uuid::new_v4();
+        let mut session_dir = root.join(format!("connection-{session_id}"));
+        // Darwin's sockaddr_un has 104 bytes including the trailing NUL.
+        // TMPDIR can already consume most of that budget. Keep the fallback
+        // short (do not canonicalize /tmp) and private from creation onward.
+        if session_dir.join("agent.sock").as_os_str().as_bytes().len() >= 104 {
+            session_dir = Path::new("/tmp").join(format!("bok-{session_id}"));
+        }
+        fs::DirBuilder::new()
+            .mode(0o700)
+            .create(&session_dir)
             .map_err(|_| SshSessionError::RuntimeDirectory)?;
         let socket_path = session_dir.join("agent.sock");
         let identity_path = session_dir.join("identity.pub");
@@ -673,6 +684,41 @@ mod tests {
             assert_eq!(signature.algorithm(), Algorithm::Ed25519);
             assert!(!signature.as_bytes().is_empty());
         });
+    }
+
+    #[test]
+    fn ephemeral_agent_supports_long_runtime_paths() {
+        let directory = tempdir().unwrap();
+        let runtime_root = directory.path().join("a".repeat(120));
+        let key = PrivateKey::random(&mut OsRng, Algorithm::Ed25519).unwrap();
+        let agent = EphemeralAgent::start_for_test(&runtime_root, key).unwrap();
+        let socket = agent.socket_path().to_owned();
+        let identity = agent.identity_path().to_owned();
+        assert!(socket.as_os_str().as_bytes().len() < 104);
+        assert_eq!(
+            socket.metadata().unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+        assert_eq!(
+            socket
+                .parent()
+                .unwrap()
+                .metadata()
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777,
+            0o700
+        );
+        assert_eq!(
+            identity.metadata().unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+        assert!(std::os::unix::net::UnixStream::connect(&socket).is_ok());
+        agent.stop();
+        assert!(!socket.exists());
+        assert!(!identity.exists());
+        assert!(!socket.parent().unwrap().exists());
     }
 
     #[test]

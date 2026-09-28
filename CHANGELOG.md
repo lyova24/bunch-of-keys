@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.7.1 - 2026-09-29
+
+- Fixed ephemeral SSH agent startup with long macOS temporary paths by using
+  a short private session directory when the Unix socket path would be too long.
+- Added regression coverage for long runtime paths, socket permissions, and cleanup.
+
 ## 1.7.0 - 2026-09-29
 
 - Added macOS support with native application and DMG bundles, browser and
