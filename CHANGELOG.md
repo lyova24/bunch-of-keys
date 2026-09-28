@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.7.0 - 2026-09-29
+
+- Added macOS support with native application and DMG bundles, browser and
+  Terminal integration, macOS runtime storage for ephemeral SSH agents, and a
+  manual Intel and Apple Silicon package workflow.
+- Kept Linux-only D-Bus monitoring and dependencies isolated from macOS builds
+  while preserving the existing Debian package.
+- Documented macOS installation for both architectures, checksum verification,
+  the unsigned-build warning, scoped Gatekeeper overrides, updates, data
+  retention, and uninstall behavior.
+
 ## 1.6.1 - 2026-09-24
 
 - Indented entry containers alongside nested groups and applied the same

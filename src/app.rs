@@ -463,6 +463,12 @@ fn launch_browser(url: &str) -> Result<(), AppError> {
             .stderr(Stdio::null())
             .spawn()
     };
+    #[cfg(target_os = "macos")]
+    return spawn("open", &[url])
+        .map(|_| ())
+        .map_err(|_| AppError::BrowserLaunch);
+
+    #[cfg(not(target_os = "macos"))]
     match spawn("xdg-open", &[url]) {
         Ok(_) => Ok(()),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => spawn("gio", &["open", url])

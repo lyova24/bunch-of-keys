@@ -1,6 +1,10 @@
 # User guide
 
-This guide describes the user-facing behavior in `bunch-of-keys` 1.6.1.
+This guide describes the user-facing behavior in `bunch-of-keys` 1.7.0.
+
+For installation on Apple Silicon or Intel Macs, including the required
+per-application Gatekeeper override for the unsigned build, see
+[Installing on macOS](INSTALL_MACOS.md).
 
 ## Vaults
 
@@ -99,6 +103,12 @@ Closing the window hides it instead of quitting. A left click on the tray icon
 shows and focuses the main window. The tray menu provides `Open
 bunch-of-keys`, `Lock vault`, and `Quit` actions.
 
+On macOS, `bunch-of-keys` appears in the menu bar. SSH actions open the system
+Terminal application, and URL actions use the default browser. Automatic
+locking on operating-system screen-lock and suspend notifications is currently
+available only on Linux; inactivity locking remains available on both
+platforms.
+
 ## YAML import
 
 A mapping containing only scalar values becomes an entry. A mapping containing
@@ -124,3 +134,6 @@ $XDG_DATA_HOME/bunch-of-keys/vaults/<uuid>.bok
 
 When those variables are not set, the conventional `~/.config` and
 `~/.local/share` locations are used.
+
+On macOS, configuration and vaults are stored under
+`~/Library/Application Support/bunch-of-keys/`.

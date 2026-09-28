@@ -135,9 +135,12 @@ pub struct EphemeralAgent {
 
 impl EphemeralAgent {
     pub fn start(private_key: PrivateKey, comment: String) -> Result<Self, SshSessionError> {
+        #[cfg(target_os = "linux")]
         let runtime_root = env::var_os("XDG_RUNTIME_DIR")
             .map(PathBuf::from)
             .ok_or(SshSessionError::RuntimeDirectoryUnavailable)?;
+        #[cfg(target_os = "macos")]
+        let runtime_root = env::temp_dir();
         Self::start_in(&runtime_root, private_key, comment, AGENT_LIFETIME)
     }
 
@@ -278,6 +281,8 @@ enum TerminalKind {
     DashE,
     DoubleDash,
     Gnome,
+    #[cfg(target_os = "macos")]
+    MacTerminal,
 }
 
 #[derive(Debug, Clone)]
@@ -301,6 +306,13 @@ impl TerminalLauncher {
             let kind =
                 terminal_kind(&program).ok_or(SshSessionError::UnsupportedTerminalOverride)?;
             return Ok(Self { program, kind });
+        }
+        #[cfg(target_os = "macos")]
+        if executable(Path::new("/usr/bin/open")) {
+            return Ok(Self {
+                program: PathBuf::from("/usr/bin/open"),
+                kind: TerminalKind::MacTerminal,
+            });
         }
         [
             "xdg-terminal-exec",
@@ -333,24 +345,75 @@ impl TerminalLauncher {
     ) -> Result<Child, SshSessionError> {
         let executable = env::current_exe().map_err(|_| SshSessionError::TerminalLaunch)?;
         let helper_args = helper_arguments(socket_path, identity_path, user, address, port);
-        let spec = self.command_spec(&executable, &helper_args);
+        let spec = self.command_spec(&executable, &helper_args)?;
         spawn_command(spec)
     }
 
-    fn command_spec(&self, executable: &Path, arguments: &[OsString]) -> CommandSpec {
+    #[allow(clippy::unnecessary_wraps)] // macOS creates a fallible Terminal command file.
+    fn command_spec(
+        &self,
+        executable: &Path,
+        arguments: &[OsString],
+    ) -> Result<CommandSpec, SshSessionError> {
+        #[cfg(target_os = "macos")]
+        if self.kind == TerminalKind::MacTerminal {
+            return mac_terminal_command(&self.program, executable, arguments);
+        }
         let mut args = match self.kind {
             TerminalKind::Xdg => Vec::new(),
             TerminalKind::DashE => vec![OsString::from("-e")],
             TerminalKind::DoubleDash => vec![OsString::from("--")],
             TerminalKind::Gnome => vec![OsString::from("--wait"), OsString::from("--")],
+            #[cfg(target_os = "macos")]
+            TerminalKind::MacTerminal => unreachable!(),
         };
         args.push(executable.as_os_str().to_owned());
         args.extend_from_slice(arguments);
-        CommandSpec {
+        Ok(CommandSpec {
             program: self.program.clone(),
             args,
-        }
+        })
     }
+}
+
+#[cfg(target_os = "macos")]
+fn mac_terminal_command(
+    program: &Path,
+    executable: &Path,
+    arguments: &[OsString],
+) -> Result<CommandSpec, SshSessionError> {
+    let session_dir = arguments
+        .get(1)
+        .map(PathBuf::from)
+        .and_then(|path| path.parent().map(Path::to_path_buf))
+        .unwrap_or_else(env::temp_dir);
+    let script = session_dir.join("ssh-session.command");
+    let mut command = String::from("#!/bin/sh\nscript=$0\nrm -f -- \"$script\"\nexec ");
+    command.push_str(&shell_quote(executable.as_os_str()));
+    for argument in arguments {
+        command.push(' ');
+        command.push_str(&shell_quote(argument));
+    }
+    command.push('\n');
+    fs::write(&script, command).map_err(|_| SshSessionError::TerminalLaunch)?;
+    fs::set_permissions(&script, fs::Permissions::from_mode(0o700))
+        .map_err(|_| SshSessionError::TerminalLaunch)?;
+    Ok(CommandSpec {
+        program: program.to_path_buf(),
+        args: vec![
+            OsString::from("-W"),
+            OsString::from("-n"),
+            OsString::from("-a"),
+            OsString::from("Terminal"),
+            script.into_os_string(),
+        ],
+    })
+}
+
+#[cfg(target_os = "macos")]
+fn shell_quote(value: &OsStr) -> String {
+    let value = value.to_string_lossy();
+    format!("'{}'", value.replace('\'', "'\\''"))
 }
 
 fn spawn_command(spec: CommandSpec) -> Result<Child, SshSessionError> {
@@ -551,7 +614,9 @@ mod tests {
             "host;touch-pwned",
             Some(2222),
         );
-        let spec = launcher.command_spec(Path::new("/usr/bin/bunch-of-keys"), &arguments);
+        let spec = launcher
+            .command_spec(Path::new("/usr/bin/bunch-of-keys"), &arguments)
+            .unwrap();
 
         assert_eq!(spec.program, Path::new("/usr/bin/xdg-terminal-exec"));
         assert_eq!(spec.args[0], "/usr/bin/bunch-of-keys");

@@ -1,11 +1,22 @@
 # bunch-of-keys
 
-`bunch-of-keys` is a Linux-first desktop application for keeping structured
+`bunch-of-keys` is a Linux and macOS desktop application for keeping structured
 credential collections encrypted on the local machine. The current release is
-**1.6.1**.
+**1.7.0**.
 
 The application is intentionally local-only: it has no cloud sync, remote web
 interface, telemetry, account requirement, or password-recovery service.
+
+## Installation
+
+- **macOS:** download the DMG matching your Mac (`aarch64` for Apple Silicon
+  or `x86_64` for Intel), drag the application into **Applications**, and
+  follow the [macOS installation guide](docs/INSTALL_MACOS.md). The current
+  builds are unsigned and not notarized, so the guide includes a scoped
+  Gatekeeper override and checksum verification.
+- **Linux:** build the Debian package as described in
+  [Development and packaging](docs/DEVELOPMENT.md), or download the `.deb`
+  artifact produced by the manual package workflow.
 
 ## Core features
 
@@ -38,12 +49,14 @@ interface, telemetry, account requirement, or password-recovery service.
   keyboard control keep large credential trees practical without modal-heavy
   workflows.
 - **Transparent and portable.** The on-disk format, security boundaries, build
-  process, and Linux integration are documented and independently testable.
+  process, and desktop integration are documented and independently testable.
 
 ## Documentation
 
 - [User guide](docs/USER_GUIDE.md) — vaults, tree navigation, field actions,
   settings, import, desktop behavior, and data locations.
+- [macOS installation](docs/INSTALL_MACOS.md) — architecture selection,
+  checksum verification, unsigned-app installation, updates, and removal.
 - [SSH key design](docs/SSH_KEYS_V2.md) — reusable keys, the ephemeral agent,
   terminal launch, and security properties.
 - [Security policy and threat model](SECURITY.md) — cryptography, runtime
@@ -51,5 +64,5 @@ interface, telemetry, account requirement, or password-recovery service.
 - [Architecture](docs/ARCHITECTURE.md) — components, encrypted storage,
   transactional updates, and the UI trust boundary.
 - [Development and packaging](docs/DEVELOPMENT.md) — dependencies, checks,
-  local development, and Debian builds.
+  local development, and Linux/macOS builds.
 - [Changelog](CHANGELOG.md) — release-by-release changes.

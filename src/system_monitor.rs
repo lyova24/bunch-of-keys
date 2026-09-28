@@ -1,15 +1,24 @@
+#[cfg(target_os = "linux")]
 use std::{thread, time::Duration};
 
+#[cfg(target_os = "linux")]
 use dbus::{blocking::Connection, message::MatchRule};
 use tauri::AppHandle;
 
+#[cfg(target_os = "linux")]
 use crate::app::lock_and_notify;
 
 pub fn spawn(app: &AppHandle) {
-    spawn_screen_lock_monitor(app.clone());
-    spawn_suspend_monitor(app.clone());
+    #[cfg(target_os = "linux")]
+    {
+        spawn_screen_lock_monitor(app.clone());
+        spawn_suspend_monitor(app.clone());
+    }
+    #[cfg(not(target_os = "linux"))]
+    let _ = app;
 }
 
+#[cfg(target_os = "linux")]
 fn spawn_screen_lock_monitor(app: AppHandle) {
     thread::spawn(move || {
         let Ok(connection) = Connection::new_session() else {
@@ -49,6 +58,7 @@ fn spawn_screen_lock_monitor(app: AppHandle) {
     });
 }
 
+#[cfg(target_os = "linux")]
 fn spawn_suspend_monitor(app: AppHandle) {
     thread::spawn(move || {
         let Ok(connection) = Connection::new_system() else {

@@ -91,3 +91,37 @@ jobs:
         run: cargo test --locked --workspace
       - name: Run UI tests
         run: node --test ui/*.test.mjs
+
+  macos:
+    name: macOS checks
+    needs: changes
+    if: needs.changes.outputs.native == 'true'
+    runs-on: macos-15-intel
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy,rustfmt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Restore Cargo cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: ${{ runner.os }}-cargo-ci-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-ci-
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+      - name: Run Clippy
+        run: cargo clippy --locked --workspace --all-targets -- -D warnings
+      - name: Run Rust tests
+        run: cargo test --locked --workspace
+      - name: Run UI tests
+        run: node --test ui/*.test.mjs

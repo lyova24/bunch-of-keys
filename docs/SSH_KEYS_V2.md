@@ -1,6 +1,6 @@
 # SSH private keys: proposed v2 design
 
-Status: implemented and current in version 1.6.1.
+Status: implemented and current in version 1.7.0.
 
 ## Recommendation
 
@@ -11,8 +11,8 @@ never writes a private-key file.
 Each connection uses a private runtime directory containing:
 
 ```text
-$XDG_RUNTIME_DIR/bunch-of-keys/connection-<random UUID>/agent.sock
-$XDG_RUNTIME_DIR/bunch-of-keys/connection-<random UUID>/identity.pub
+<private runtime directory>/bunch-of-keys/connection-<random UUID>/agent.sock
+<private runtime directory>/bunch-of-keys/connection-<random UUID>/identity.pub
 ```
 
 `identity.pub` contains only the selected public key and makes that key an
@@ -40,9 +40,11 @@ stores:
    If `ssh` exits with an error, the terminal keeps the original output visible
    until Enter is pressed.
 
-`xdg-terminal-exec` is preferred. Known terminal emulators are supported as
-direct-argument fallbacks, and `BUNCH_OF_KEYS_TERMINAL` can select one of those
-executables explicitly. No launcher path uses `sh -c`.
+On Linux, `xdg-terminal-exec` is preferred. Known terminal emulators are
+supported as direct-argument fallbacks, and `BUNCH_OF_KEYS_TERMINAL` can select
+one explicitly. On macOS, Terminal.app opens a short-lived owner-only command
+file that deletes itself before directly executing the app's SSH helper. The
+file contains connection metadata but no private-key material or passphrase.
 
 ## Security properties and limitations
 

@@ -1,7 +1,7 @@
 # Architecture
 
 This document describes the architecture implemented in `bunch-of-keys`
-1.6.1.
+1.7.0.
 
 ## Components
 
@@ -12,8 +12,8 @@ This document describes the architecture implemented in `bunch-of-keys`
 └──────────────────────┬─────────────────────┘
                        │ narrow IPC commands
 ┌──────────────────────▼─────────────────────┐
-│ Linux application service                  │
-│ sessions, clipboard, URL/SSH launch, D-Bus │
+│ Desktop application service                │
+│ sessions, clipboard, URL and SSH launch    │
 └──────────────────────┬─────────────────────┘
                        │ typed Rust API
 ┌──────────────────────▼─────────────────────┐
@@ -26,7 +26,7 @@ This document describes the architecture implemented in `bunch-of-keys`
 └────────────────────────────────────────────┘
 ```
 
-The `src/core/` module has no dependency on Tauri or Linux APIs. It owns the
+The `src/core/` module has no dependency on Tauri or platform APIs. It owns the
 tree model, validation, YAML conversion, and encrypted envelope. This keeps the
 on-disk format independently testable and leaves room for a future CLI while
 retaining a single-crate repository layout.
@@ -158,6 +158,13 @@ $XDG_DATA_HOME/bunch-of-keys/vaults/<uuid>.bok
 
 If the XDG variables are absent, the conventional `~/.config` and
 `~/.local/share` locations are used through the `directories` crate.
+
+On macOS, paths are resolved under the user's Library:
+
+```text
+~/Library/Application Support/bunch-of-keys/config.json
+~/Library/Application Support/bunch-of-keys/vaults/<uuid>.bok
+```
 
 The registry and vault envelope are capped at 1 MiB and 64 MiB respectively.
 Application directories use mode `0700`, and atomically written files use mode

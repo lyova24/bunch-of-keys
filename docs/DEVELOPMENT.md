@@ -10,6 +10,12 @@ sudo apt install build-essential curl file libappindicator3-dev \
   libgtk-3-dev librsvg2-dev libssl-dev libwebkit2gtk-4.1-dev
 ```
 
+On macOS, install the Xcode Command Line Tools before installing Rust:
+
+```bash
+xcode-select --install
+```
+
 ## Checks
 
 Run the same Rust checks used by CI:
@@ -67,3 +73,24 @@ The `Build Debian package` GitHub Actions workflow can also be started
 manually for a selected branch, tag, or commit. It uploads a versioned `.deb`
 and SHA-256 checksum as a workflow artifact; it does not create a GitHub
 release, tag, or signature.
+
+## macOS package
+
+Build the native application and disk image on a Mac with:
+
+```bash
+cargo tauri build --bundles app,dmg
+```
+
+The outputs are written under `target/release/bundle/macos/` and
+`target/release/bundle/dmg/`. Builds are architecture-specific; run the build
+on Apple Silicon for `aarch64` or on an Intel Mac for `x86_64`. The manual
+`Build macOS package` workflow creates unsigned DMG artifacts for both
+architectures. Because they are not signed or notarized, macOS may require
+opening one via Finder's **Open** context-menu action. Production distribution
+should add an Apple Developer ID certificate and notarization credentials.
+
+End-user installation, checksum verification, and the scoped Gatekeeper
+override for these unsigned builds are documented in the
+[macOS installation guide](INSTALL_MACOS.md). Do not instruct users to disable
+Gatekeeper globally.
