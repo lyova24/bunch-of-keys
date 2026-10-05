@@ -22,14 +22,14 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.ref }}
       - name: Check version synchronization
         run: bash scripts/check-version-sync.sh
       - uses: dtolnay/rust-toolchain@stable
       - name: Restore Cargo cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry/index
@@ -64,7 +64,7 @@ jobs:
           echo "- Version: \`$version\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- SHA-256: \`$(cut -d ' ' -f 1 "$artifact.sha256")\`" >> "$GITHUB_STEP_SUMMARY"
       - name: Upload Debian artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.artifact.outputs.name }}
           path: dist/*
