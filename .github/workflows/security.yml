@@ -2,7 +2,7 @@ name: Dependency security
 
 on:
   push:
-    branches: [master]
+    branches: [master, macos]
     paths:
       - Cargo.toml
       - Cargo.lock
@@ -30,18 +30,20 @@ concurrency:
 jobs:
   policy:
     name: Licenses and dependency policy
-    runs-on: ubuntu-24.04
+    runs-on: macos-26
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - name: Check licenses, sources, and dependency bans
-        uses: EmbarkStudios/cargo-deny-action@v2
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@v2
         with:
-          command: check bans licenses sources
+          tool: cargo-deny
+      - name: Check licenses, sources, and dependency bans
+        run: cargo deny check bans licenses sources
 
   audit:
     name: RustSec audit
-    runs-on: ubuntu-24.04
+    runs-on: macos-26
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4

@@ -10,3 +10,6 @@
 *.bok
 /.data/
 /.config/
+
+/macos/.build/
+/dist/

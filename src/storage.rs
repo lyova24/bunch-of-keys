@@ -17,6 +17,10 @@ const MAX_VAULT_BYTES: u64 = 64 * 1024 * 1024;
 pub struct Settings {
     #[serde(default)]
     pub autostart: bool,
+    #[serde(default = "default_appearance")]
+    pub appearance: String,
+    #[serde(default = "default_liquid_glass")]
+    pub liquid_glass: bool,
     #[serde(default = "default_auto_lock_seconds")]
     pub auto_lock_seconds: u64,
     #[serde(default = "default_clipboard_clear_seconds")]
@@ -27,6 +31,8 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             autostart: false,
+            appearance: default_appearance(),
+            liquid_glass: default_liquid_glass(),
             auto_lock_seconds: default_auto_lock_seconds(),
             clipboard_clear_seconds: default_clipboard_clear_seconds(),
         }
@@ -35,7 +41,8 @@ impl Default for Settings {
 
 impl Settings {
     pub fn validate(&self) -> Result<(), StorageError> {
-        if !(60..=86_400).contains(&self.auto_lock_seconds)
+        if !["system", "light", "dark"].contains(&self.appearance.as_str())
+            || !(60..=86_400).contains(&self.auto_lock_seconds)
             || !(5..=3_600).contains(&self.clipboard_clear_seconds)
         {
             return Err(StorageError::InvalidSettings);
@@ -78,6 +85,8 @@ pub struct AppStorage {
 
 #[derive(Debug, Error)]
 pub enum StorageError {
+    #[error("another bunch-of-keys service is already using this data directory")]
+    AlreadyRunning,
     #[error("the platform does not provide a user data directory")]
     NoHomeDirectory,
     #[error("cannot create an application directory: {0}")]
@@ -125,6 +134,20 @@ impl AppStorage {
         })
     }
 
+    pub fn lock_instance(&self) -> Result<File, StorageError> {
+        use std::os::unix::fs::OpenOptionsExt;
+        let file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .mode(0o600)
+            .open(self.config_file.with_file_name(".instance.lock"))
+            .map_err(StorageError::Write)?;
+        file.try_lock().map_err(|_| StorageError::AlreadyRunning)?;
+        Ok(file)
+    }
+
     pub fn load_config(&self) -> Result<AppConfig, StorageError> {
         if !self.config_file.exists() {
             return Ok(AppConfig::default());
@@ -160,6 +183,13 @@ impl AppStorage {
             let _ = fs::remove_file(self.vault_dir.join(&record.file_name));
         }
     }
+}
+
+fn default_appearance() -> String {
+    "system".to_owned()
+}
+fn default_liquid_glass() -> bool {
+    true
 }
 
 fn default_auto_lock_seconds() -> u64 {
@@ -252,6 +282,30 @@ mod tests {
     use tempfile::tempdir;
 
     use super::*;
+
+    #[test]
+    fn legacy_settings_keep_defaults_for_native_preferences() {
+        let settings: Settings = serde_json::from_str(
+            r#"{"autostart":true,"auto_lock_seconds":300,"clipboard_clear_seconds":30}"#,
+        )
+        .unwrap();
+        assert_eq!(settings.appearance, "system");
+        assert!(settings.liquid_glass);
+        assert!(settings.autostart);
+    }
+
+    #[test]
+    fn instance_lock_prevents_two_writers_and_releases_on_exit() {
+        let directory = tempdir().unwrap();
+        let storage = AppStorage::new(directory.path(), directory.path()).unwrap();
+        let lock = storage.lock_instance().unwrap();
+        assert!(matches!(
+            storage.lock_instance(),
+            Err(StorageError::AlreadyRunning)
+        ));
+        drop(lock);
+        assert!(storage.lock_instance().is_ok());
+    }
 
     #[test]
     fn round_trips_configuration_and_vault_bytes() {

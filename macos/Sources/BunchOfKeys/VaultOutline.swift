@@ -1,0 +1,366 @@
+import SwiftUI
+import AppKit
+
+private let draftPasteboardType = NSPasteboard.PasteboardType("dev.bunchofkeys.draft")
+private let nodePasteboardType = NSPasteboard.PasteboardType("dev.bunchofkeys.node")
+private let fieldPasteboardType = NSPasteboard.PasteboardType("dev.bunchofkeys.saved-field")
+
+final class OutlineNode: NSObject {
+    let id: String
+    var node: VaultNode?
+    var field: VaultField?
+    var entryId: String?
+    var route: EditorRoute?
+    var isEditor = false
+    var children: [OutlineNode] = []
+    init(_ id: String) { self.id = id }
+}
+// Outline indentation shifts cell origins; constrain hosted content to the visible
+// trailing edge instead of letting SwiftUI use the full unindented column width.
+final class HostedOutlineCell: NSTableCellView {
+    let host: NSView
+    weak var outline: NSOutlineView?
+    init(host: NSView, outline: NSOutlineView) {
+        self.host = host; self.outline = outline
+        super.init(frame: .zero)
+        addSubview(host)
+    }
+    required init?(coder: NSCoder) { nil }
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize); needsLayout = true
+    }
+    override func layout() {
+        super.layout()
+        let origin = outline.map { convert(bounds, to: $0).minX } ?? 0
+        let available = (outline?.visibleRect.maxX ?? bounds.width) - origin - 12
+        host.frame = NSRect(x: 0, y: 0, width: max(0, min(bounds.width, available)), height: bounds.height)
+    }
+}
+final class VaultOutlineView: NSOutlineView {
+    var activate: (() -> Void)?
+    var delete: (() -> Void)?
+    override func keyDown(with event: NSEvent) {
+        if event.keyCode == 36 || event.keyCode == 76 { activate?() }
+        else if event.keyCode == 51 { delete?() }
+        else { super.keyDown(with: event) }
+    }
+}
+struct VaultOutline: NSViewRepresentable {
+    @ObservedObject var store: AppStore
+    func makeCoordinator() -> Coordinator { Coordinator(store) }
+    func makeNSView(context: Context) -> NSScrollView {
+        let outline = VaultOutlineView()
+        let column = NSTableColumn(identifier: .init("credentials")); column.title = "Credentials"
+        column.resizingMask = .autoresizingMask
+        outline.autoresizingMask = [.width]
+        outline.columnAutoresizingStyle = .lastColumnOnlyAutoresizingStyle
+        outline.addTableColumn(column); outline.outlineTableColumn = column; outline.headerView = nil
+        outline.dataSource = context.coordinator; outline.delegate = context.coordinator
+        outline.rowSizeStyle = .medium; outline.indentationPerLevel = 14
+        outline.style = .inset; outline.selectionHighlightStyle = .regular
+        outline.backgroundColor = .clear; outline.focusRingType = .none
+        outline.registerForDraggedTypes([nodePasteboardType, draftPasteboardType, fieldPasteboardType])
+        outline.setDraggingSourceOperationMask(.move, forLocal: true)
+        outline.target = context.coordinator; outline.doubleAction = #selector(Coordinator.doubleClick)
+        outline.activate = { [weak coordinator = context.coordinator] in coordinator?.activate() }
+        outline.delete = { [weak coordinator = context.coordinator] in coordinator?.contextItem = nil; coordinator?.remove() }
+        let menu = NSMenu(); menu.delegate = context.coordinator; outline.menu = menu
+        let scroll = NSScrollView(); scroll.documentView = outline; scroll.hasVerticalScroller = true
+        scroll.drawsBackground = false; scroll.autohidesScrollers = true
+        context.coordinator.outline = outline
+        return scroll
+    }
+    func updateNSView(_ scroll: NSScrollView, context: Context) { context.coordinator.update(store.filteredNodes) }
+
+    @MainActor final class Coordinator: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegate, NSMenuDelegate {
+        let store: AppStore
+        weak var outline: VaultOutlineView?
+        var roots: [OutlineNode] = []
+        var boxes: [String: OutlineNode] = [:]
+        var previous: [VaultNode] = []
+        var editorSignature = ""
+        var editorHost: NSHostingView<InlineEditor>?
+        var expanded = Set<String>()
+        var updating = false
+        var didFocus = false
+        var contextItem: OutlineNode?
+        init(_ store: AppStore) { self.store = store }
+
+        func update(_ nodes: [VaultNode]) {
+            guard let outline else { return }
+            let route = store.editor?.isInline == true ? store.editor : nil
+            let signature = route.map { "\($0.id):\($0.parentId ?? "root"):\($0.insertionIndex ?? -1)" } ?? ""
+            updating = true; defer { updating = false }
+            let selectedItem = outline.item(atRow: outline.selectedRow) as? OutlineNode
+            if previous != nodes || signature != editorSignature {
+                let oldRoute = editorHost?.rootView.routeId
+                previous = nodes; editorSignature = signature
+                var next: [String: OutlineNode] = [:]
+                func box(_ id: String) -> OutlineNode {
+                    let item = boxes[id] ?? OutlineNode(id)
+                    item.node = nil; item.field = nil; item.entryId = nil; item.route = nil; item.isEditor = false; item.children = []
+                    next[id] = item; return item
+                }
+                func editor(_ route: EditorRoute) -> OutlineNode {
+                    let item = box("editor:\(route.id)"); item.route = route; item.isEditor = true; return item
+                }
+                func tree(_ node: VaultNode) -> OutlineNode {
+                    let item = box(node.id); item.node = node
+                    if node.isGroup { item.children = (node.children ?? []).map(tree) }
+                    else {
+                        item.children = (node.fields ?? []).map { field in
+                            let item = box("field:\(node.id):\(field.id)"); item.field = field; item.entryId = node.id; return item
+                        }
+                    }
+                    if let route {
+                        switch route.kind {
+                        case .entry(let edited), .group(let edited):
+                            if edited?.id == node.id {
+                                if node.isGroup { item.children.insert(editor(route), at: 0) }
+                                else { item.children = [editor(route)] }
+                            }
+                        default: break
+                        }
+                    }
+                    return item
+                }
+                roots = nodes.map(tree)
+                if let route {
+                    let edited: VaultNode?
+                    switch route.kind { case .entry(let node), .group(let node): edited = node; default: edited = nil }
+                    if edited == nil {
+                        let draft = box("draft:\(route.id)"); draft.route = route; draft.children = [editor(route)]
+                        if let parentId = route.parentId, let parent = next[parentId] {
+                            parent.children.insert(draft, at: min(route.insertionIndex ?? parent.children.count, parent.children.count))
+                        } else { roots.insert(draft, at: min(route.insertionIndex ?? roots.count, roots.count)) }
+                        expanded.insert(draft.id)
+                    } else if let edited { expanded.insert(edited.id) }
+                    var ancestor = edited?.id ?? route.parentId
+                    while let id = ancestor {
+                        expanded.insert(id); ancestor = store.vault?.parent(of: id)
+                    }
+                    if oldRoute != route.id {
+                        editorHost = NSHostingView(rootView: InlineEditor(store: store, routeId: route.id))
+                        editorHost?.sizingOptions = []
+                    }
+                } else { editorHost = nil }
+                boxes = next
+                outline.reloadData()
+                // Expanding ancestors first also restores nested entries after a reload.
+                func restore(_ items: [OutlineNode]) {
+                    for item in items where expanded.contains(item.id) || !store.search.isEmpty {
+                        outline.expandItem(item); restore(item.children)
+                    }
+                }
+                restore(roots)
+                if let route, oldRoute != route.id, let item = boxes["editor:\(route.id)"] {
+                    let row = outline.row(forItem: item)
+                    if row >= 0 { outline.scrollRowToVisible(row) }
+                }
+            }
+            var fieldRows = IndexSet()
+            for row in 0..<outline.numberOfRows where (outline.item(atRow: row) as? OutlineNode)?.field != nil { fieldRows.insert(row) }
+            outline.noteHeightOfRows(withIndexesChanged: fieldRows)
+            if !didFocus, !nodes.isEmpty, route == nil {
+                didFocus = true
+                DispatchQueue.main.async { [weak self, weak outline] in
+                    guard let self, let outline, let window = outline.window, self.store.editor == nil else { return }
+                    window.makeFirstResponder(outline)
+                    if self.store.selection == nil { outline.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false) }
+                }
+            }
+            let selectedNodeId = selectedItem?.node?.id ?? selectedItem?.entryId ?? selectedItem?.route?.parentId
+            if let selectedItem, selectedNodeId == store.selection,
+               let item = boxes[selectedItem.id], outline.row(forItem: item) >= 0 {
+                outline.selectRowIndexes(IndexSet(integer: outline.row(forItem: item)), byExtendingSelection: false)
+            } else if let selection = store.selection, let item = boxes[selection], outline.row(forItem: item) >= 0 {
+                outline.selectRowIndexes(IndexSet(integer: outline.row(forItem: item)), byExtendingSelection: false)
+            } else if outline.selectedRow != -1 { outline.deselectAll(nil) }
+        }
+        func children(_ item: Any?) -> [OutlineNode] { (item as? OutlineNode)?.children ?? roots }
+        func outlineView(_ outlineView: NSOutlineView, numberOfChildrenOfItem item: Any?) -> Int { children(item).count }
+        func outlineView(_ outlineView: NSOutlineView, child index: Int, ofItem item: Any?) -> Any { children(item)[index] }
+        func outlineView(_ outlineView: NSOutlineView, isItemExpandable item: Any) -> Bool {
+            guard let item = item as? OutlineNode else { return false }
+            return item.node?.isGroup == true || !item.children.isEmpty
+        }
+        func outlineView(_ outlineView: NSOutlineView, shouldSelectItem item: Any) -> Bool {
+            guard let item = item as? OutlineNode else { return false }
+            return !item.isEditor
+        }
+        func outlineView(_ outlineView: NSOutlineView, rowViewForItem item: Any) -> NSTableRowView? {
+            guard let item = item as? OutlineNode, let field = item.field, let entry = item.entryId else { return nil }
+            let row = NSTableRowView()
+            var actions: [NSAccessibilityCustomAction] = []
+            if field.kind != "ssh" {
+                actions.append(NSAccessibilityCustomAction(name: "Copy \(field.label)") { [weak store] in store?.copy(entry: entry, field: field.id); return true })
+            }
+            if field.masked {
+                actions.append(NSAccessibilityCustomAction(name: "Reveal or hide \(field.label)") { [weak store] in store?.reveal(entry: entry, field: field.id); return true })
+            }
+            if field.kind == "url" || field.kind == "ssh" {
+                actions.append(NSAccessibilityCustomAction(name: field.kind == "url" ? "Open URL" : "Connect in Terminal") { [weak self] in self?.performFieldAction(field, entry: entry); return true })
+            }
+            row.setAccessibilityCustomActions(actions)
+            return row
+        }
+        func outlineView(_ outlineView: NSOutlineView, heightOfRowByItem item: Any) -> CGFloat {
+            guard let item = item as? OutlineNode else { return 30 }
+            if item.isEditor {
+                if case .group = item.route?.kind { return 200 }
+                return 380
+            }
+            if let field = item.field {
+                if field.ssh != nil { return 72 }
+                let lines = min(3, (store.revealed[field.id] ?? field.value ?? "").split(separator: "\n", omittingEmptySubsequences: false).count)
+                return CGFloat(48 + max(0, lines - 1) * 16)
+            }
+            return 30
+        }
+        func outlineView(_ outlineView: NSOutlineView, viewFor tableColumn: NSTableColumn?, item: Any) -> NSView? {
+            guard let item = item as? OutlineNode else { return nil }
+            if item.isEditor, let host = editorHost {
+                host.removeFromSuperview()
+                return HostedOutlineCell(host: host, outline: outlineView)
+            }
+            if let field = item.field, let entry = item.entryId {
+                let host = NSHostingView(rootView: FieldRow(store: store, entry: entry, field: field).preferredColorScheme(store.colorScheme))
+                host.sizingOptions = []
+                return HostedOutlineCell(host: host, outline: outlineView)
+            }
+            let cell = NSTableCellView()
+            let group: Bool
+            if let node = item.node { group = node.isGroup }
+            else if case .group = item.route?.kind { group = true }
+            else { group = false }
+            let name = item.node?.name ?? (group ? "New Group" : "New Entry")
+            let image = NSImageView(); image.image = NSImage(systemSymbolName: group ? "folder" : "key.horizontal", accessibilityDescription: group ? "Group" : "Entry")
+            image.contentTintColor = group ? .secondaryLabelColor : .controlAccentColor
+            let text = NSTextField(labelWithString: name); text.lineBreakMode = .byTruncatingTail; text.font = .systemFont(ofSize: NSFont.systemFontSize)
+            image.translatesAutoresizingMaskIntoConstraints = false; text.translatesAutoresizingMaskIntoConstraints = false
+            cell.addSubview(image); cell.addSubview(text); cell.imageView = image; cell.textField = text
+            NSLayoutConstraint.activate([
+                image.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 2), image.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+                image.widthAnchor.constraint(equalToConstant: 18), image.heightAnchor.constraint(equalToConstant: 18),
+                text.leadingAnchor.constraint(equalTo: image.trailingAnchor, constant: 8), text.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -4),
+                text.centerYAnchor.constraint(equalTo: cell.centerYAnchor)
+            ])
+            cell.setAccessibilityLabel(name); return cell
+        }
+        func outlineViewSelectionDidChange(_ notification: Notification) {
+            guard !updating, let outline else { return }
+            let item = outline.item(atRow: outline.selectedRow) as? OutlineNode
+            store.selection = item?.node?.id ?? item?.entryId ?? item?.route?.parentId; store.touch()
+        }
+        func outlineViewItemDidExpand(_ notification: Notification) {
+            if let item = notification.userInfo?["NSObject"] as? OutlineNode { expanded.insert(item.id) }
+        }
+        func outlineViewItemDidCollapse(_ notification: Notification) {
+            if let item = notification.userInfo?["NSObject"] as? OutlineNode { expanded.remove(item.id) }
+        }
+        @objc func doubleClick() { activate(edit: true) }
+        func activate(edit: Bool = false) {
+            guard let outline, let item = outline.item(atRow: outline.selectedRow) as? OutlineNode else { return }
+            if let field = item.field, let entry = item.entryId { performFieldAction(field, entry: entry) }
+            else if let node = item.node {
+                if edit && !node.isGroup { store.edit(node) }
+                else if outline.isItemExpanded(item) { outline.collapseItem(item) }
+                else { outline.expandItem(item) }
+            }
+        }
+        func performFieldAction(_ field: VaultField, entry: String) {
+            if field.kind == "url" { store.openURL(entry: entry, field: field.id) }
+            else if field.kind == "ssh" { Task { await store.connect(entry: entry, field: field.id) } }
+            else { store.copy(entry: entry, field: field.id) }
+        }
+        @objc func remove() {
+            guard store.editor == nil, !store.busy else { return }
+            let selected = outline.flatMap { $0.item(atRow: $0.selectedRow) as? OutlineNode }
+            if (contextItem ?? selected)?.field != nil { return }
+            if let node = contextItem?.node ?? store.selectedNode { store.deleteTarget = node }
+        }
+        @objc func editNode() {
+            if let item = contextItem, let node = item.node ?? store.vault?.node(item.entryId) { store.edit(node) }
+        }
+        @objc func copyField() { if let item = contextItem, let field = item.field, let entry = item.entryId { store.copy(entry: entry, field: field.id) } }
+        @objc func revealField() { if let item = contextItem, let field = item.field, let entry = item.entryId { store.reveal(entry: entry, field: field.id) } }
+        @objc func openField() { if let item = contextItem, let field = item.field, let entry = item.entryId { performFieldAction(field, entry: entry) } }
+        func menuNeedsUpdate(_ menu: NSMenu) {
+            menu.removeAllItems()
+            guard let outline else { return }
+            contextItem = outline.item(atRow: outline.clickedRow) as? OutlineNode
+            guard let item = contextItem, !item.isEditor, item.route == nil else { return }
+            func add(_ title: String, _ action: Selector) {
+                let actionItem = NSMenuItem(title: title, action: action, keyEquivalent: ""); actionItem.target = self
+                actionItem.isEnabled = !store.busy && store.editor == nil; menu.addItem(actionItem)
+            }
+            if let field = item.field {
+                if field.kind != "ssh" { add("Copy", #selector(copyField)) }
+                if field.masked { add("Reveal / Hide", #selector(revealField)) }
+                if field.kind == "url" { add("Open URL", #selector(openField)) }
+                if field.kind == "ssh" { add("Connect in Terminal", #selector(openField)) }
+                menu.addItem(.separator())
+            }
+            add("Edit…", #selector(editNode))
+            if item.node != nil { add("Delete…", #selector(remove)) }
+        }
+        func outlineView(_ outlineView: NSOutlineView, pasteboardWriterForItem item: Any) -> NSPasteboardWriting? {
+            guard store.search.isEmpty, !store.busy, let node = item as? OutlineNode, !node.isEditor else { return nil }
+            let item = NSPasteboardItem()
+            if let route = node.route {
+                item.setData(Data(route.id.uuidString.utf8), forType: draftPasteboardType)
+            } else {
+                guard store.editor == nil else { return nil }
+                if let field = node.field, let entry = node.entryId { item.setString("\(entry):\(field.id)", forType: fieldPasteboardType) }
+                else if let value = node.node { item.setString(value.id, forType: nodePasteboardType) }
+                else { return nil }
+            }
+            return item
+        }
+        func outlineView(_ outlineView: NSOutlineView, validateDrop info: NSDraggingInfo, proposedItem item: Any?, proposedChildIndex index: Int) -> NSDragOperation {
+            guard store.search.isEmpty, !store.busy else { return [] }
+            let target = item as? OutlineNode
+            if let draft = info.draggingPasteboard.data(forType: draftPasteboardType), String(data: draft, encoding: .utf8) == store.editor?.id.uuidString {
+                if let target, target.node?.isGroup != true { return [] }
+                return .move
+            }
+            guard store.editor == nil else { return [] }
+            if let value = info.draggingPasteboard.string(forType: fieldPasteboardType) {
+                let ids = value.split(separator: ":").map(String.init)
+                guard ids.count == 2, target?.node?.id == ids[0], target?.node?.isGroup == false else { return [] }
+                return .move
+            }
+            guard let id = info.draggingPasteboard.string(forType: nodePasteboardType), let dragged = store.vault?.node(id) else { return [] }
+            if let target { guard let node = target.node, node.isGroup, dragged.find(node.id) == nil else { return [] } }
+            return .move
+        }
+        func outlineView(_ outlineView: NSOutlineView, acceptDrop info: NSDraggingInfo, item: Any?, childIndex index: Int) -> Bool {
+            guard !self.outlineView(outlineView, validateDrop: info, proposedItem: item, proposedChildIndex: index).isEmpty else { return false }
+            let targetItem = item as? OutlineNode
+            let parent = targetItem?.node
+            if let draft = info.draggingPasteboard.data(forType: draftPasteboardType), String(data: draft, encoding: .utf8) == store.editor?.id.uuidString {
+                let children = targetItem?.children ?? roots
+                let before = index == NSOutlineViewDropOnItemIndex ? children : Array(children.prefix(index))
+                store.editor?.parentId = parent?.id
+                store.editor?.insertionIndex = before.filter { $0.node != nil }.count
+                store.selection = parent?.id
+                if let item { outlineView.expandItem(item) }
+                return true
+            }
+            if let value = info.draggingPasteboard.string(forType: fieldPasteboardType) {
+                let ids = value.split(separator: ":").map(String.init)
+                guard ids.count == 2, let fields = parent?.fields, let source = fields.firstIndex(where: { $0.id == ids[1] }) else { return false }
+                var destination = index == NSOutlineViewDropOnItemIndex ? fields.count : index
+                if source < destination { destination -= 1 }
+                store.moveField(ids[1], entry: ids[0], index: destination); return true
+            }
+            guard let id = info.draggingPasteboard.string(forType: nodePasteboardType), let vault = store.vault else { return false }
+            let children = parent?.children ?? vault.nodes
+            var destination = index == NSOutlineViewDropOnItemIndex ? children.count : index
+            if vault.parent(of: id) == parent?.id, let source = children.firstIndex(where: { $0.id == id }), source < destination { destination -= 1 }
+            store.move(id, parent: parent?.id, index: destination)
+            if let item { outlineView.expandItem(item) }
+            return true
+        }
+    }
+}

@@ -1,127 +1,45 @@
 name: CI
-
 on:
   push:
-    branches: [master]
+    branches: [master, macos]
   pull_request:
   workflow_dispatch:
-
 permissions:
   contents: read
-
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
-
 jobs:
-  changes:
-    name: Classify changes
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    outputs:
-      native: ${{ steps.changes.outputs.native }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Detect native changes
-        id: changes
-        env:
-          BEFORE_SHA: ${{ github.event.before }}
-          EVENT_NAME: ${{ github.event_name }}
-          HEAD_SHA: ${{ github.sha }}
-          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: |
-          if [[ "$EVENT_NAME" == "pull_request" ]]; then
-            base="$PR_BASE_SHA"
-          else
-            base="$BEFORE_SHA"
-          fi
-
-          if [[ -z "$base" || "$base" =~ ^0+$ ]]; then
-            base="$(git rev-list --max-parents=0 "$HEAD_SHA")"
-          fi
-
-          native=false
-          while IFS= read -r path; do
-            case "$path" in
-              README.md|CHANGELOG.md|LICENSE|SECURITY.md|docs/*) ;;
-              *) native=true; break ;;
-            esac
-          done < <(git diff --name-only "$base" "$HEAD_SHA")
-
-          echo "native=$native" >> "$GITHUB_OUTPUT"
-      - name: Check version synchronization
-        run: bash scripts/check-version-sync.sh
-
-  native:
-    name: Rust and UI checks
-    needs: changes
-    if: needs.changes.outputs.native == 'true'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy,rustfmt
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - name: Restore Cargo cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry/index
-            ~/.cargo/registry/cache
-            ~/.cargo/git/db
-            target
-          key: ${{ runner.os }}-cargo-ci-${{ hashFiles('Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-ci-
-      - name: Install Linux desktop dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libappindicator3-dev libgtk-3-dev libwebkit2gtk-4.1-dev
-      - name: Check formatting
-        run: cargo fmt --all -- --check
-      - name: Run Clippy
-        run: cargo clippy --locked --workspace --all-targets -- -D warnings
-      - name: Run Rust tests
-        run: cargo test --locked --workspace
-      - name: Run UI tests
-        run: node --test ui/*.test.mjs
-
   macos:
-    name: macOS checks
-    needs: changes
-    if: needs.changes.outputs.native == 'true'
-    runs-on: macos-15-intel
+    name: Native macOS checks (${{ matrix.arch }})
+    strategy:
+      matrix:
+        include:
+          - arch: arm64
+            target: aarch64-apple-darwin
+          - arch: x86_64
+            target: x86_64-apple-darwin
+    runs-on: macos-26
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy,rustfmt
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - name: Restore Cargo cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry/index
-            ~/.cargo/registry/cache
-            ~/.cargo/git/db
-            target
-          key: ${{ runner.os }}-cargo-ci-${{ hashFiles('Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-ci-
-      - name: Check formatting
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+      - name: Check synchronized version
+        run: bash scripts/check-version-sync.sh
+      - name: Check Rust formatting
         run: cargo fmt --all -- --check
       - name: Run Clippy
-        run: cargo clippy --locked --workspace --all-targets -- -D warnings
-      - name: Run Rust tests
-        run: cargo test --locked --workspace
-      - name: Run UI tests
-        run: node --test ui/*.test.mjs
+        run: cargo clippy --locked --all-targets -- -D warnings
+      - name: Test core and storage compatibility
+        run: cargo test --locked
+      - name: Build native application
+        env:
+          BOK_ARCH: ${{ matrix.arch }}
+        run: bash scripts/build-macos.sh
+      - name: Test Swift client against the bundled service
+        if: matrix.arch == 'arm64'
+        run: bash scripts/test-native.sh

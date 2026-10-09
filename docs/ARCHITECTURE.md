@@ -1,221 +1,79 @@
 # Architecture
 
-This document describes the architecture implemented in `bunch-of-keys`
-1.7.0.
+Version 2.0.0 is macOS-only. The presentation layer is SwiftUI/AppKit, built
+against the macOS SDK with a macOS 14 deployment target. There is no webview,
+HTML/JavaScript frontend, or Tauri runtime.
 
 ## Components
 
 ```text
-┌────────────────────────────────────────────┐
-│ Tauri window and tray                      │
-│ static HTML/CSS/JS, no remote content      │
-└──────────────────────┬─────────────────────┘
-                       │ narrow IPC commands
-┌──────────────────────▼─────────────────────┐
-│ Desktop application service                │
-│ sessions, clipboard, URL and SSH launch    │
-└──────────────────────┬─────────────────────┘
-                       │ typed Rust API
-┌──────────────────────▼─────────────────────┐
-│ src/core                                   │
-│ tree model, YAML import, envelope crypto   │
-└──────────────────────┬─────────────────────┘
-                       │ atomic file writes
-┌──────────────────────▼─────────────────────┐
-│ config.json + vaults/<uuid>.bok            │
-└────────────────────────────────────────────┘
+SwiftUI application + AppKit outline + native system integrations
+                    │ private inherited stdin/stdout pipes
+Rust service: src/protocol.rs → src/app.rs
+                    │ transactional operations
+src/core: model, validation, YAML import, Argon2id/XChaCha20-Poly1305
+                    │ atomic writes
+config.json + vaults/<uuid>.bok
 ```
 
-The `src/core/` module has no dependency on Tauri or platform APIs. It owns the
-tree model, validation, YAML conversion, and encrypted envelope. This keeps the
-on-disk format independently testable and leaves room for a future CLI while
-retaining a single-crate repository layout.
+The app bundle contains `Contents/MacOS/bunch-of-keys` (Swift) and
+`Contents/MacOS/bunch-of-keys-core` (Rust). The core starts once per application
+process. JSON requests and responses are newline framed with request IDs,
+serialized on a dedicated queue, and bounded to 72 MiB. No localhost server or
+persistent IPC socket is exposed. Secret arguments are sent over pipes, never
+command-line arguments. EOF locks and exits the service; a crashed service
+clears the native UI and reports an error. Reopening the app starts it again.
 
-`src/app.rs` owns the unlocked session and exposes a small set of Tauri
-commands. `src/view.rs` converts the encrypted model into the webview-facing
-representation. `src/storage.rs` owns the application registry and atomic file
-I/O. `src/system_monitor.rs` listens for supported screen-lock and suspend
-signals.
+An exclusive file lock prevents simultaneous service writers for the same data
+directory; macOS app launches activate an existing instance. CoreClient handles
+transport; AppStore publishes the masked view, selection, editor state, settings,
+and active connections. A generation counter rejects late responses after
+locking. SwiftUI uses one native outline for groups, entries, fields and inline
+editors, forms, commands, Settings and MenuBarExtra. AppKit's NSOutlineView supplies native
+hierarchical keyboard navigation, selection, context menus, and direct moves.
+Search disables ordering operations because filtered indices are ambiguous.
+Field editors use direct drag-and-drop and preserve stable field identities.
 
-## Multiple vaults and sessions
+Only one vault can be unlocked at a time. Model changes clone the current data,
+validate, encrypt, atomically persist, and then commit the in-memory update.
+Names, fields, and SSH key documents remain encrypted. Ordinary view responses
+contain no masked values or private key documents. Explicit reveal, edit and
+copy actions request field values separately. The native pasteboard clears only
+while its change counter still matches the app's write. Locking clears pending
+clipboard data owned by the app as well as reveals, drafts, and active agents.
 
-The application registry stores a list of vault UUIDs, display names, and
-filenames, plus non-sensitive application settings. Vault display names are
-deliberately treated as non-secret because the user must choose a vault before
-supplying its password. Everything below a vault—including group names, entry
-names, field labels, and values—is encrypted.
+A backend watchdog enforces inactivity independently of the native UI's polling.
+Local AppKit input updates activity. NSWorkspace sleep, display-sleep and session
+notifications, plus the distributed screen-lock notification, trigger locking.
+The app remains available in the menu bar after closing the main window. Quit
+first requests a lock, then closes the pipe and waits for graceful service exit.
 
-Only one vault is unlocked in a process at a time. Unlocking or creating a
-vault installs an in-memory `Session`; locking drops it and notifies the UI.
-Closing the window only hides it, so it does not lock the session by itself.
-The inactivity timer, supported screen-lock signals, supported suspend signals,
-the UI lock action, and the tray lock action all use the same lock path.
+Settings live in the existing registry, including appearance and Liquid Glass.
+ServiceManagement's SMAppService controls launch at login. On macOS 26+, the
+Liquid Glass preference combines SwiftUI glassEffect surfaces with a native
+NSVisualEffectView using behind-window blending across the main and Settings
+windows. The window and title-bar backgrounds are transparent; the native
+material stays below the SwiftUI content and resizes with the window. Disabling
+the preference or enabling Reduce Transparency restores an opaque background.
+Standard Mac controls follow the operating system's appearance.
 
-## Vault tree and field model
+## Compatibility and storage
 
-The encrypted payload contains a recursive list of two node variants:
-
-```text
-Node
-├── Group { id, name, children[] }
-└── Entry { id, name, fields[] }
-```
-
-Each field has a stable UUID, label, value, kind, and masking flag. Current
-field kinds are `text`, `secret`, `url`, and `ssh`. SSH fields store structured
-connection data and a reference to a reusable named private key in the
-encrypted vault. The deserializer accepts the retired `note` kind as `text`,
-which preserves existing vaults without a data migration.
-
-Tree moves specify the node UUID, target parent group (or the root), and target
-index. The model rejects missing targets, invalid positions, and cyclic group
-moves. Field order is the order stored in each entry's field list.
-
-## UI state and editing
-
-The frontend is static HTML, CSS, and JavaScript under `ui/`; it does not use a
-remote runtime or load remote content. The Rust `VaultView` sent to the webview
-contains full values only for non-masked fields. Masked values are represented
-by their ID, label, kind, and mask state until an explicit reveal command is
-made.
-
-Frontend presentation is split by responsibility. `design-system.css` owns
-the color, spacing, radius, control-size, typography, form, menu, dialog, and
-feedback primitives. `styles.css` composes those primitives into the window,
-authentication views, vault tree, inline editors, and responsive layouts.
-`ui-components.js` owns the shared icon registry and small DOM factories,
-while `app.js` remains responsible for application state, rendering, and IPC
-orchestration. This keeps repeated controls consistent without adding a remote
-runtime or build step.
-
-Expansion state, search text, the active group, keyboard tree selection,
-revealed values, and unsaved drafts are ephemeral frontend state. They are
-cleared when the vault locks or the user switches sessions.
-
-The visible vault hierarchy is exposed as an accessible tree with one roving
-tab stop. Group headers, entry headers, and fields in expanded entries share a
-single visual-order navigation sequence. Entering an unlocked vault focuses
-the current roving tab stop, so arrow-key input works before any pointer input.
-Up and Down move in visual order, Right expands, and Left collapses an expanded
-node or moves from child content to its containing tree item. Enter toggles
-nodes or dispatches the selected field action. Keyboard selection is restored
-across DOM re-renders, rendered as a left-edge accent, and cleared on pointer
-input.
-
-Shared CSS variables define the total horizontal step used by group children,
-entry containers, and credential or editor containers. Compact breakpoints
-change the margin and padding components together so every level remains
-aligned.
-
-The selected appearance mode is the exception: `system`, `light`, or `dark` is
-stored in webview local storage. The resolved light or dark appearance is kept
-separate from that preference. A `prefers-color-scheme` listener updates every
-surface immediately while System mode is active and becomes a no-op in either
-explicit mode. Legacy stored `light` and `dark` values remain valid explicit
-preferences.
-
-Only one inline draft or editor is allowed at a time. A new group or entry
-draft initially belongs to the selected parent, but remains a DOM-only object
-until save. Dragging the draft changes its `parentId` and displayed path; the
-backend receives only the final parent when the draft is saved. This prevents
-temporary nodes from being written to the encrypted vault.
-
-The last expanded group is the active group. The header Add menu uses it as the
-default parent. Collapsing that group or one of its ancestors, or clicking
-elsewhere outside the active group and its descendants, restores the root as
-the default parent. This selection is visual UI state and is never persisted.
-
-Saved-node drag-and-drop calls `move_node`, which performs a normal
-transactional mutation. Field drag-and-drop changes editor row order, and that
-order is persisted when the entry is saved. Custom drag images copy only the
-node header, remain translucent, and are scaled to 105% of the source header
-after compensating for the display scale.
-
-## Window and desktop integration
-
-The main Tauri window is transparent and undecorated. The visible rounded
-surface, its shadow, and the resize handles are implemented in CSS so resizing
-tracks the visible edge instead of an invisible native shadow. The vault view
-opens at the configured 440 × 480 logical-pixel minimum; setup and unlock views
-measure their content before resizing.
-
-The wide header places a capped-width search box between the vault identity and
-the application actions. At compact widths search moves onto its own row, while
-the minimize and hide-to-tray controls remain visible.
-
-The tray exposes Open, Lock, and Quit actions. A left click shows and focuses
-the main window, and a second application launch focuses the existing instance.
-Autostart launches that instance hidden and locked.
-
-## File locations
-
-Linux paths follow the XDG base directory specification:
-
-```text
-$XDG_CONFIG_HOME/bunch-of-keys/config.json
-$XDG_DATA_HOME/bunch-of-keys/vaults/<uuid>.bok
-```
-
-If the XDG variables are absent, the conventional `~/.config` and
-`~/.local/share` locations are used through the `directories` crate.
-
-On macOS, paths are resolved under the user's Library:
+The envelope and encrypted payload formats are unchanged. Existing macOS 1.x
+registry and vault files are discovered in:
 
 ```text
 ~/Library/Application Support/bunch-of-keys/config.json
 ~/Library/Application Support/bunch-of-keys/vaults/<uuid>.bok
 ```
 
-The registry and vault envelope are capped at 1 MiB and 64 MiB respectively.
-Application directories use mode `0700`, and atomically written files use mode
-`0600` on Unix.
+New preference keys deserialize with defaults when opening older registries.
+Legacy Note fields continue to decode as Text, and schema v1 data keeps its
+existing field identities during the existing v2 SSH-schema migration.
+Application directories have mode 0700 and vault files mode 0600. Atomic writes
+use an exclusive temporary file, sync, rename, and directory sync.
 
-## Encrypted envelope
-
-The `.bok` file is a versioned JSON envelope. JSON is used only for the
-non-secret framing and base64 ciphertext. The encrypted payload is also
-versioned and may move to a different serialization format in a future format
-version.
-
-```text
-VaultEnvelope
-├── magic = "BOKV"
-├── format_version
-├── vault_id
-├── KDF parameters + salt
-├── wrapped vault key
-│   ├── nonce
-│   └── ciphertext + authentication tag
-└── encrypted payload
-    ├── nonce
-    └── ciphertext + authentication tag
-```
-
-The password itself is never used as a cipher key. Argon2id derives a fixed
-length key-encryption key. Successful authenticated decryption of the random
-vault key is the password check; a separate password verifier is not stored.
-
-## Transactional updates
-
-Every persisted mutation is applied to a cloned in-memory tree. The backend
-validates the result, encrypts a new envelope with a fresh payload nonce, and
-writes it to a temporary file in the same directory. The file is synced and
-atomically renamed over the destination. Only after a successful write does
-the active session adopt the new tree.
-
-The same mutation path is used for adding, editing, renaming, deleting,
-moving, reordering, and importing nodes. A failed validation, encryption, or
-write leaves both the active session and the existing vault file unchanged.
-
-## UI trust boundary
-
-The webview receives non-masked values needed for display and search. Masked
-values are excluded from that view, so their contents are not searchable in
-the frontend. Revealing a masked field returns its value explicitly. Copying
-any field happens in Rust from its entry and field IDs without returning the
-copied value to JavaScript.
-
-The UI loads local assets only. The content security policy permits only local
-scripts, styles, and images plus Tauri IPC. Tauri capabilities expose only the
-application's own commands and the minimal core APIs required for events and
-window interaction.
+For development and automated tests only, BUNCH_OF_KEYS_DATA_DIR redirects both
+registry and vault storage. Testing uses synthetic vaults in temporary folders.
+SSH agents use private per-connection temporary directories, with a short /tmp
+fallback for Darwin's Unix socket path limit. See SSH_KEYS_V2.md for details.

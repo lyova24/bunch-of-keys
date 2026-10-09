@@ -2,95 +2,73 @@
 
 ## Requirements
 
-The project requires Rust 1.85 or newer and Node.js for frontend regression
-tests. On Debian or Ubuntu, install the desktop build dependencies with:
+- macOS 14+ on Apple Silicon or Intel.
+- Xcode 26+ or Command Line Tools containing a macOS 26+ SDK and Swift 6.
+- Rust 1.89+ (stable) with rustfmt and Clippy; Python 3 for icon packaging.
 
-```bash
-sudo apt install build-essential curl file libappindicator3-dev \
-  libgtk-3-dev librsvg2-dev libssl-dev libwebkit2gtk-4.1-dev
+The UI uses SwiftUI, AppKit, ServiceManagement and UniformTypeIdentifiers.
+The Rust service keeps the audited encryption and OpenSSH-agent implementation.
+No Node, Tauri CLI, GTK, D-Bus or WebKit dependencies are needed.
+
+## Build and run
+
+```sh
+bash scripts/build-macos.sh
+open target/macos/$(uname -m)/bunch-of-keys.app
 ```
 
-On macOS, install the Xcode Command Line Tools before installing Rust:
+Open macos/Package.swift in Xcode to navigate and compile the Swift executable.
+For a complete runnable bundle with its Rust service, use the packaging script.
+The build uses the SDK selected by xcrun, or an explicit SDKROOT override, with a
+macOS 14 deployment target. When multiple SDK generations are installed, ensure
+the selected SDK matches your compiler and linker.
 
-```bash
-xcode-select --install
+For an isolated manual run without touching your real vaults:
+
+```sh
+BUNCH_OF_KEYS_DATA_DIR=/tmp/bok-development \
+  target/macos/$(uname -m)/bunch-of-keys.app/Contents/MacOS/bunch-of-keys
 ```
 
 ## Checks
 
-Run the same Rust checks used by CI:
-
-```bash
-cargo fmt --all -- --check
-cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace
-```
-
-The UI regression tests use Node.js' built-in test runner:
-
-```bash
-node --test ui/*.test.mjs
-```
-
-Check that the package version matches in Cargo, the lockfile, Tauri, and the
-latest changelog entry:
-
-```bash
+```sh
 bash scripts/check-version-sync.sh
+cargo fmt --all -- --check
+cargo clippy --locked --all-targets -- -D warnings
+cargo test --locked
+bash scripts/build-macos.sh
+bash scripts/test-native.sh
 ```
 
-CI runs the Rust and UI checks only when a pull request or `master` update
-contains non-documentation changes. Dependency policy and RustSec audits run
-when Cargo inputs change and on a weekly schedule. Dependabot groups weekly
-Cargo and GitHub Actions updates. Existing RustSec exceptions are narrowly
-documented in `.cargo/audit.toml`; new vulnerability advisories still fail the
-audit.
+Rust tests cover encryption, model validation, compatibility, storage and SSH
+agent cleanup. Swift integration tests exercise the actual bundled pipe service,
+masking, copying, URLs, field reordering, tree moves, YAML import, SSH key
+references, preferences, and persistence after a full process restart. Native
+store tests verify clipboard ownership, clearing on lock, and protection from
+late reveal responses on a private test pasteboard.
+Visually verify native windows, editing, drag-and-drop, lock/unlock, Settings,
+appearance and Liquid Glass using synthetic data before shipping UI changes.
 
-## Local development
+## Packaging
 
-Install the Tauri CLI and run the desktop application:
-
-```bash
-cargo install tauri-cli --version '^2' --locked
-cargo tauri dev
+```sh
+bash scripts/build-macos.sh --dmg
 ```
 
-The frontend is static HTML, CSS, and JavaScript under `ui/`. The Rust backend
-is a single crate under `src/`; see [the architecture overview](ARCHITECTURE.md)
-for component and trust-boundary details.
+The result is `dist/bunch-of-keys_2.0.0_<arch>.dmg` plus its SHA-256 checksum.
+Set BOK_ARCH=arm64 or BOK_ARCH=x86_64 to cross-build another architecture after
+installing the matching Rust target with rustup. The script signs locally with
+an ad-hoc identity by default. Set BOK_SIGN_IDENTITY to a Developer ID identity
+for distribution signing. Notarization is a separate release step and requires
+Apple developer credentials; ad-hoc builds are not notarized.
 
-## Debian package
+The manual GitHub package workflow accepts a branch/tag/commit and builds both
+architectures on macOS 26. CI also checks both native bundles, Rust and Swift.
+The Intel bundle is cross-compiled on Apple Silicon; interactive runtime checks
+on Intel hardware remain part of release verification. Security checks run on
+macOS and use cargo-deny and cargo-audit. No workflow publishes releases,
+creates tags, or closes GitHub issues automatically.
 
-Build a Debian package with:
-
-```bash
-cargo tauri build --bundles deb
-```
-
-The resulting package is written under `target/release/bundle/deb/`.
-
-The `Build Debian package` GitHub Actions workflow can also be started
-manually for a selected branch, tag, or commit. It uploads a versioned `.deb`
-and SHA-256 checksum as a workflow artifact; it does not create a GitHub
-release, tag, or signature.
-
-## macOS package
-
-Build the native application and disk image on a Mac with:
-
-```bash
-cargo tauri build --bundles app,dmg
-```
-
-The outputs are written under `target/release/bundle/macos/` and
-`target/release/bundle/dmg/`. Builds are architecture-specific; run the build
-on Apple Silicon for `aarch64` or on an Intel Mac for `x86_64`. The manual
-`Build macOS package` workflow creates unsigned DMG artifacts for both
-architectures. Because they are not signed or notarized, macOS may require
-opening one via Finder's **Open** context-menu action. Production distribution
-should add an Apple Developer ID certificate and notarization credentials.
-
-End-user installation, checksum verification, and the scoped Gatekeeper
-override for these unsigned builds are documented in the
-[macOS installation guide](INSTALL_MACOS.md). Do not instruct users to disable
-Gatekeeper globally.
+Version synchronization covers Cargo.toml, the root Cargo.lock package,
+macos/Info.plist (both bundle versions), and the latest changelog entry.

@@ -1,28 +1,18 @@
-#![allow(clippy::needless_pass_by_value)] // Tauri commands deserialize owned IPC arguments.
-
 use std::{
     collections::HashMap,
-    process::{Command, Stdio},
-    sync::{
-        Arc, Mutex,
-        atomic::{AtomicU64, Ordering},
-    },
+    sync::{Arc, Mutex},
     thread,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use serde::Serialize;
 use ssh_key::PrivateKey;
-use tauri::{AppHandle, Emitter, LogicalSize, Manager, State};
-use tauri_plugin_autostart::ManagerExt;
 use thiserror::Error;
 use uuid::Uuid;
 use zeroize::Zeroizing;
 
 use crate::{
-    core::{
-        FieldInput, FieldKind, SshConnection, UnlockedVault, VaultData, VaultEnvelope, import_yaml,
-    },
+    core::{FieldKind, SshConnection, UnlockedVault, VaultData, VaultEnvelope},
     ssh_session::{EphemeralAgent, SshSessionError, TerminalLauncher, monitor_terminal},
     storage::{AppConfig, AppStorage, Settings, StorageError, VaultRecord},
     view::VaultView,
@@ -39,7 +29,7 @@ pub struct AppState {
     storage: AppStorage,
     config: Mutex<AppConfig>,
     session: Mutex<Option<Session>>,
-    clipboard_generation: Arc<AtomicU64>,
+    last_activity: Mutex<Instant>,
     active_ssh: Mutex<HashMap<(Uuid, Uuid), ActiveSshSession>>,
 }
 
@@ -48,9 +38,8 @@ struct ActiveSshSession {
     agent: EphemeralAgent,
 }
 
-#[derive(Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct SshSessionEnded {
+#[derive(Debug, Clone, Serialize)]
+pub struct SshSessionEnded {
     entry_id: Uuid,
     field_id: Uuid,
 }
@@ -60,6 +49,7 @@ pub struct Bootstrap {
     pub vaults: Vec<VaultSummary>,
     pub settings: Settings,
     pub current: Option<VaultView>,
+    pub active_ssh: Vec<SshSessionEnded>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -69,7 +59,7 @@ pub struct VaultSummary {
 }
 
 #[derive(Debug, Error)]
-enum AppError {
+pub enum AppError {
     #[error("application state is unavailable")]
     StateUnavailable,
     #[error("a vault must be unlocked first")]
@@ -92,14 +82,8 @@ enum AppError {
     Model(#[from] crate::core::ModelError),
     #[error(transparent)]
     Import(#[from] crate::core::ImportError),
-    #[error("clipboard is unavailable: {0}")]
-    Clipboard(String),
     #[error("URL fields must use http:// or https://")]
     InvalidUrl,
-    #[error("the system browser could not be opened")]
-    BrowserLaunch,
-    #[error("autostart could not be changed: {0}")]
-    Autostart(String),
     #[error("SSH field is incomplete or unavailable")]
     InvalidSshField,
     #[error("SSH key passphrase is required")]
@@ -112,17 +96,46 @@ enum AppError {
     SshSession(#[from] SshSessionError),
 }
 
-type CommandResult<T> = Result<T, String>;
-
 impl AppState {
     pub fn new(storage: AppStorage, config: AppConfig) -> Self {
         Self {
             storage,
             config: Mutex::new(config),
             session: Mutex::new(None),
-            clipboard_generation: Arc::new(AtomicU64::new(0)),
+            last_activity: Mutex::new(Instant::now()),
             active_ssh: Mutex::new(HashMap::new()),
         }
+    }
+
+    pub fn touch(&self) {
+        if let Ok(mut last) = self.last_activity.lock() {
+            *last = Instant::now();
+        }
+    }
+
+    pub fn spawn_idle_monitor(self: &Arc<Self>) {
+        let state = Arc::downgrade(self);
+        thread::spawn(move || {
+            loop {
+                thread::sleep(Duration::from_secs(1));
+                let Some(state) = state.upgrade() else {
+                    break;
+                };
+                state.expire_if_idle();
+            }
+        });
+    }
+
+    fn expire_if_idle(&self) -> bool {
+        let timeout = self
+            .config
+            .lock()
+            .map_or(300, |config| config.settings.auto_lock_seconds);
+        let elapsed = self
+            .last_activity
+            .lock()
+            .map_or(timeout, |last| last.elapsed().as_secs());
+        elapsed >= timeout && self.lock()
     }
 
     pub fn lock(&self) -> bool {
@@ -143,7 +156,7 @@ impl AppState {
         }
     }
 
-    fn bootstrap(&self) -> Result<Bootstrap, AppError> {
+    pub fn bootstrap(&self) -> Result<Bootstrap, AppError> {
         let config = self.config.lock().map_err(|_| AppError::StateUnavailable)?;
         let current = self
             .session
@@ -155,10 +168,23 @@ impl AppState {
             vaults: config.vaults.iter().map(VaultSummary::from).collect(),
             settings: config.settings.clone(),
             current,
+            active_ssh: self
+                .active_ssh
+                .lock()
+                .map_err(|_| AppError::StateUnavailable)?
+                .iter()
+                .filter(|(_, session)| !session.agent.is_finished())
+                .map(|((entry_id, field_id), _)| SshSessionEnded {
+                    entry_id: *entry_id,
+                    field_id: *field_id,
+                })
+                .collect(),
         })
     }
 
-    fn create_vault(&self, name: &str, password: &[u8]) -> Result<VaultView, AppError> {
+    pub fn create_vault(&self, name: &str, password: &[u8]) -> Result<VaultView, AppError> {
+        self.lock();
+        self.touch();
         let name = validate_vault_name(name)?;
         validate_password(password)?;
 
@@ -196,7 +222,9 @@ impl AppState {
         Ok(view)
     }
 
-    fn unlock_vault(&self, vault_id: Uuid, password: &[u8]) -> Result<VaultView, AppError> {
+    pub fn unlock_vault(&self, vault_id: Uuid, password: &[u8]) -> Result<VaultView, AppError> {
+        self.lock();
+        self.touch();
         let record = self
             .config
             .lock()
@@ -219,7 +247,7 @@ impl AppState {
         Ok(view)
     }
 
-    fn mutate<F>(&self, operation: F) -> Result<VaultView, AppError>
+    pub fn mutate<F>(&self, operation: F) -> Result<VaultView, AppError>
     where
         F: FnOnce(&mut VaultData) -> Result<(), AppError>,
     {
@@ -240,7 +268,7 @@ impl AppState {
         ))
     }
 
-    fn field_value(&self, entry_id: Uuid, field_id: Uuid) -> Result<String, AppError> {
+    pub fn field_value(&self, entry_id: Uuid, field_id: Uuid) -> Result<String, AppError> {
         self.session
             .lock()
             .map_err(|_| AppError::StateUnavailable)?
@@ -253,36 +281,7 @@ impl AppState {
             .ok_or(AppError::Model(crate::core::ModelError::NodeNotFound))
     }
 
-    fn copy_field(&self, entry_id: Uuid, field_id: Uuid) -> Result<(), AppError> {
-        let value = Zeroizing::new(self.field_value(entry_id, field_id)?);
-        let mut clipboard =
-            arboard::Clipboard::new().map_err(|error| AppError::Clipboard(error.to_string()))?;
-        clipboard
-            .set_text(value.as_str())
-            .map_err(|error| AppError::Clipboard(error.to_string()))?;
-
-        let generation = self.clipboard_generation.fetch_add(1, Ordering::SeqCst) + 1;
-        let timeout = self
-            .config
-            .lock()
-            .map_err(|_| AppError::StateUnavailable)?
-            .settings
-            .clipboard_clear_seconds;
-        let generation_counter = Arc::clone(&self.clipboard_generation);
-        thread::spawn(move || {
-            thread::sleep(Duration::from_secs(timeout));
-            if generation_counter.load(Ordering::SeqCst) == generation
-                && let Ok(mut clipboard) = arboard::Clipboard::new()
-                && let Ok(current) = clipboard.get_text()
-                && current == value.as_str()
-            {
-                let _ = clipboard.set_text(String::new());
-            }
-        });
-        Ok(())
-    }
-
-    fn open_url(&self, entry_id: Uuid, field_id: Uuid) -> Result<(), AppError> {
+    pub fn open_url(&self, entry_id: Uuid, field_id: Uuid) -> Result<String, AppError> {
         let url = self
             .session
             .lock()
@@ -298,12 +297,11 @@ impl AppState {
         if !valid_external_url(&url) {
             return Err(AppError::InvalidUrl);
         }
-        launch_browser(&url)
+        Ok(url)
     }
 
-    fn connect_ssh(
-        &self,
-        app: AppHandle,
+    pub fn connect_ssh(
+        self: &Arc<Self>,
         entry_id: Uuid,
         field_id: Uuid,
         passphrase: Option<&str>,
@@ -332,6 +330,7 @@ impl AppState {
         let session_key = (entry_id, field_id);
         let session_id = Uuid::new_v4();
         let cancel = agent.cancellation_sender();
+        let socket_path = agent.socket_path().to_owned();
         active.insert(
             session_key,
             ActiveSshSession {
@@ -340,21 +339,15 @@ impl AppState {
             },
         );
         drop(active);
-        monitor_terminal(child, cancel, move || {
-            let state = app.state::<AppState>();
-            let ended = state.active_ssh.lock().is_ok_and(|mut active| {
-                if active
+        let state = Arc::downgrade(self);
+        monitor_terminal(child, cancel, socket_path, move || {
+            if let Some(state) = state.upgrade()
+                && let Ok(mut active) = state.active_ssh.lock()
+                && active
                     .get(&session_key)
                     .is_some_and(|session| session.id == session_id)
-                {
-                    active.remove(&session_key);
-                    true
-                } else {
-                    false
-                }
-            });
-            if ended {
-                let _ = app.emit("ssh-session-ended", SshSessionEnded { entry_id, field_id });
+            {
+                active.remove(&session_key);
             }
         });
         Ok(())
@@ -387,7 +380,7 @@ impl AppState {
         ))
     }
 
-    fn save_settings(&self, settings: Settings) -> Result<(), AppError> {
+    pub fn save_settings(&self, settings: Settings) -> Result<(), AppError> {
         settings.validate()?;
         let mut config = self.config.lock().map_err(|_| AppError::StateUnavailable)?;
         let previous = config.settings.clone();
@@ -439,10 +432,6 @@ fn unlock_ssh_private_key(encoded: &str, passphrase: Option<&str>) -> Result<Pri
         .map_err(|_| AppError::InvalidSshPassphrase)
 }
 
-fn command<T>(result: Result<T, AppError>) -> CommandResult<T> {
-    result.map_err(|error| error.to_string())
-}
-
 fn valid_external_url(url: &str) -> bool {
     let Some(remainder) = url
         .strip_prefix("https://")
@@ -454,266 +443,31 @@ fn valid_external_url(url: &str) -> bool {
     !authority.is_empty() && !url.chars().any(char::is_whitespace)
 }
 
-fn launch_browser(url: &str) -> Result<(), AppError> {
-    let spawn = |program: &str, arguments: &[&str]| {
-        Command::new(program)
-            .args(arguments)
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
-    };
-    #[cfg(target_os = "macos")]
-    return spawn("open", &[url])
-        .map(|_| ())
-        .map_err(|_| AppError::BrowserLaunch);
-
-    #[cfg(not(target_os = "macos"))]
-    match spawn("xdg-open", &[url]) {
-        Ok(_) => Ok(()),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => spawn("gio", &["open", url])
-            .map(|_| ())
-            .map_err(|_| AppError::BrowserLaunch),
-        Err(_) => Err(AppError::BrowserLaunch),
-    }
-}
-
-#[tauri::command]
-pub fn bootstrap(state: State<'_, AppState>) -> CommandResult<Bootstrap> {
-    command(state.bootstrap())
-}
-
-#[tauri::command]
-pub fn create_vault(
-    name: String,
-    password: String,
-    state: State<'_, AppState>,
-) -> CommandResult<VaultView> {
-    let password = Zeroizing::new(password);
-    command(state.create_vault(&name, password.as_bytes()))
-}
-
-#[tauri::command]
-pub fn unlock_vault(
-    vault_id: Uuid,
-    password: String,
-    state: State<'_, AppState>,
-) -> CommandResult<VaultView> {
-    let password = Zeroizing::new(password);
-    command(state.unlock_vault(vault_id, password.as_bytes()))
-}
-
-#[tauri::command]
-pub fn lock_vault(app: AppHandle, state: State<'_, AppState>) {
-    state.lock();
-    let _ = app.emit("vault-locked", ());
-}
-
-#[tauri::command]
-pub fn minimize_window(window: tauri::WebviewWindow) -> CommandResult<()> {
-    window.minimize().map_err(|error| error.to_string())
-}
-
-#[tauri::command]
-pub fn hide_window(window: tauri::WebviewWindow) -> CommandResult<()> {
-    window.hide().map_err(|error| error.to_string())
-}
-
-#[tauri::command]
-pub fn resize_window(width: f64, height: f64, window: tauri::WebviewWindow) -> CommandResult<()> {
-    if !width.is_finite()
-        || !height.is_finite()
-        || !(440.0..=2_000.0).contains(&width)
-        || !(480.0..=1_400.0).contains(&height)
-    {
-        return Err("window dimensions are outside the supported range".to_owned());
-    }
-    window
-        .set_size(LogicalSize::new(width, height))
-        .map_err(|error| error.to_string())
-}
-
-#[tauri::command]
-pub fn add_group(
-    parent_id: Option<Uuid>,
-    name: String,
-    state: State<'_, AppState>,
-) -> CommandResult<VaultView> {
-    command(state.mutate(|data| {
-        data.add_group(parent_id, &name)?;
-        Ok(())
-    }))
-}
-
-#[tauri::command]
-pub fn add_entry(
-    parent_id: Option<Uuid>,
-    name: String,
-    fields: Vec<FieldInput>,
-    state: State<'_, AppState>,
-) -> CommandResult<VaultView> {
-    command(state.mutate(|data| {
-        data.add_entry(parent_id, &name, fields)?;
-        Ok(())
-    }))
-}
-
-#[tauri::command]
-pub fn update_entry(
-    entry_id: Uuid,
-    name: String,
-    fields: Vec<FieldInput>,
-    state: State<'_, AppState>,
-) -> CommandResult<VaultView> {
-    command(state.mutate(|data| {
-        data.replace_entry(entry_id, &name, fields)?;
-        Ok(())
-    }))
-}
-
-#[tauri::command]
-pub fn add_ssh_key(
-    name: String,
-    private_key: String,
-    state: State<'_, AppState>,
-) -> CommandResult<VaultView> {
-    let private_key = Zeroizing::new(private_key);
-    command(state.mutate(|data| {
-        data.add_ssh_key(&name, private_key.as_str())?;
-        Ok(())
-    }))
-}
-
-#[tauri::command]
-pub fn update_ssh_key(
-    key_id: Uuid,
-    name: String,
-    private_key: Option<String>,
-    state: State<'_, AppState>,
-) -> CommandResult<VaultView> {
-    let private_key = private_key.map(Zeroizing::new);
-    command(state.mutate(|data| {
-        data.update_ssh_key(key_id, &name, private_key.as_deref().map(String::as_str))?;
-        Ok(())
-    }))
-}
-
-#[tauri::command]
-pub fn delete_ssh_key(key_id: Uuid, state: State<'_, AppState>) -> CommandResult<VaultView> {
-    command(state.mutate(|data| {
-        data.delete_ssh_key(key_id)?;
-        Ok(())
-    }))
-}
-
-#[tauri::command]
-pub fn rename_node(
-    node_id: Uuid,
-    name: String,
-    state: State<'_, AppState>,
-) -> CommandResult<VaultView> {
-    command(state.mutate(|data| {
-        data.rename_node(node_id, &name)?;
-        Ok(())
-    }))
-}
-
-#[tauri::command]
-pub fn delete_node(node_id: Uuid, state: State<'_, AppState>) -> CommandResult<VaultView> {
-    command(state.mutate(|data| {
-        data.delete_node(node_id)?;
-        Ok(())
-    }))
-}
-
-#[tauri::command]
-pub fn move_node(
-    node_id: Uuid,
-    parent_id: Option<Uuid>,
-    index: usize,
-    state: State<'_, AppState>,
-) -> CommandResult<VaultView> {
-    command(state.mutate(|data| {
-        data.move_node(node_id, parent_id, index)?;
-        Ok(())
-    }))
-}
-
-#[tauri::command]
-pub fn import_yaml_file(source: String, state: State<'_, AppState>) -> CommandResult<VaultView> {
-    command(state.mutate(|data| {
-        data.extend_root(import_yaml(&source)?);
-        Ok(())
-    }))
-}
-
-#[tauri::command]
-pub fn reveal_field(
-    entry_id: Uuid,
-    field_id: Uuid,
-    state: State<'_, AppState>,
-) -> CommandResult<String> {
-    command(state.field_value(entry_id, field_id))
-}
-
-#[tauri::command]
-pub fn copy_field(entry_id: Uuid, field_id: Uuid, state: State<'_, AppState>) -> CommandResult<()> {
-    command(state.copy_field(entry_id, field_id))
-}
-
-#[tauri::command]
-pub fn open_url(entry_id: Uuid, field_id: Uuid, state: State<'_, AppState>) -> CommandResult<()> {
-    command(state.open_url(entry_id, field_id))
-}
-
-#[tauri::command]
-pub fn connect_ssh(
-    app: AppHandle,
-    entry_id: Uuid,
-    field_id: Uuid,
-    passphrase: Option<String>,
-    state: State<'_, AppState>,
-) -> CommandResult<()> {
-    let passphrase = passphrase.map(Zeroizing::new);
-    command(state.connect_ssh(
-        app,
-        entry_id,
-        field_id,
-        passphrase.as_deref().map(String::as_str),
-    ))
-}
-
-#[tauri::command]
-pub fn update_settings(
-    app: AppHandle,
-    settings: Settings,
-    state: State<'_, AppState>,
-) -> CommandResult<()> {
-    settings.validate().map_err(|error| error.to_string())?;
-    let autostart = app.autolaunch();
-    let result = if settings.autostart {
-        autostart.enable()
-    } else {
-        autostart.disable()
-    };
-    result.map_err(|error| AppError::Autostart(error.to_string()).to_string())?;
-    command(state.save_settings(settings))
-}
-
-pub fn lock_and_notify(app: &AppHandle) {
-    if let Some(state) = app.try_state::<AppState>()
-        && state.lock()
-    {
-        let _ = app.emit("vault-locked", ());
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use ssh_key::{Algorithm, LineEnding, PrivateKey, rand_core::OsRng};
     use tempfile::tempdir;
 
     use super::*;
+    use crate::core::FieldInput;
+
+    #[test]
+    fn inactivity_expires_the_session_and_activity_resets_the_deadline() {
+        let directory = tempdir().unwrap();
+        let storage = AppStorage::new(directory.path(), directory.path()).unwrap();
+        let state = AppState::new(storage, AppConfig::default());
+        state.create_vault("Idle", b"test-password").unwrap();
+        *state.last_activity.lock().unwrap() = Instant::now()
+            .checked_sub(Duration::from_secs(301))
+            .unwrap();
+        state.touch();
+        assert!(!state.expire_if_idle());
+        *state.last_activity.lock().unwrap() = Instant::now()
+            .checked_sub(Duration::from_secs(301))
+            .unwrap();
+        assert!(state.expire_if_idle());
+        assert!(state.bootstrap().unwrap().current.is_none());
+    }
 
     #[test]
     fn accepts_master_passwords_from_eight_characters() {

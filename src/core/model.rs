@@ -157,6 +157,8 @@ pub enum ModelError {
     NodeNotFound,
     #[error("the requested entry does not exist")]
     EntryNotFound,
+    #[error("the requested field does not exist")]
+    FieldNotFound,
     #[error("a group cannot be moved inside itself or one of its descendants")]
     CyclicMove,
     #[error("the requested node position does not exist")]
@@ -231,6 +233,26 @@ impl VaultData {
         let entry = find_entry_mut(&mut self.nodes, entry_id).ok_or(ModelError::EntryNotFound)?;
         entry.name = name;
         entry.fields = fields;
+        Ok(())
+    }
+
+    pub fn move_field(
+        &mut self,
+        entry_id: Uuid,
+        field_id: Uuid,
+        index: usize,
+    ) -> Result<(), ModelError> {
+        let entry = find_entry_mut(&mut self.nodes, entry_id).ok_or(ModelError::EntryNotFound)?;
+        let source = entry
+            .fields
+            .iter()
+            .position(|field| field.id == field_id)
+            .ok_or(ModelError::FieldNotFound)?;
+        if index >= entry.fields.len() {
+            return Err(ModelError::PositionOutOfBounds);
+        }
+        let field = entry.fields.remove(source);
+        entry.fields.insert(index, field);
         Ok(())
     }
 
@@ -761,6 +783,38 @@ mod tests {
     }
 
     #[test]
+    fn field_moves_preserve_secrets_and_reject_invalid_positions() {
+        let mut vault = VaultData::default();
+        let entry = vault
+            .add_entry(
+                None,
+                "Server",
+                vec![
+                    field("Password", "synthetic-secret", true),
+                    field("Username", "deploy", false),
+                ],
+            )
+            .unwrap();
+        let fields = find_entry(&vault.nodes, entry).unwrap().fields.clone();
+        vault.move_field(entry, fields[0].id, 1).unwrap();
+        assert_eq!(vault.field(entry, fields[0].id).unwrap(), &fields[0]);
+        assert_eq!(
+            find_entry(&vault.nodes, entry).unwrap().fields[1].id,
+            fields[0].id
+        );
+        let before = vault.clone();
+        assert_eq!(
+            vault.move_field(entry, fields[0].id, 2),
+            Err(ModelError::PositionOutOfBounds)
+        );
+        assert_eq!(
+            vault.move_field(entry, Uuid::new_v4(), 0),
+            Err(ModelError::FieldNotFound)
+        );
+        assert_eq!(vault, before);
+    }
+
+    #[test]
     fn legacy_note_fields_load_as_text_without_data_loss() {
         let field: CredentialField = serde_json::from_str(
             r#"{
@@ -835,7 +889,7 @@ mod tests {
         vault.migrate().unwrap();
 
         assert_eq!(vault.schema_version, 2);
-        assert!(vault.ssh_keys.is_empty());
+        assert_eq!(vault.ssh_keys.len(), 0);
         assert_eq!(
             vault
                 .field(
@@ -991,7 +1045,7 @@ mod tests {
 
         vault.delete_node(group).unwrap();
 
-        assert!(vault.nodes.is_empty());
+        assert_eq!(vault.nodes.len(), 0);
         assert!(matches!(
             vault.replace_entry(entry, "Entry", Vec::new()),
             Err(ModelError::EntryNotFound)

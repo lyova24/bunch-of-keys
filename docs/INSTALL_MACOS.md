@@ -1,93 +1,42 @@
 # Installing on macOS
 
-`bunch-of-keys` 1.7.0 is distributed as separate unsigned DMG images for
-Apple Silicon and Intel Macs. The application is not signed with an Apple
-Developer ID and is not notarized, so Gatekeeper cannot verify its publisher
-and may block the first launch.
+Version 2.0.0 supports macOS 14 Sonoma or later. Liquid Glass requires macOS 26.
+Choose arm64 for Apple Silicon (M-series) or x86_64 for Intel (Apple menu →
+About This Mac). Download the matching DMG and SHA-256 file from the package
+workflow artifacts or a release, when available.
 
-## Choose the correct build
+## Verify and install
 
-Open **Apple menu → About This Mac** and check the processor or chip:
+In the directory containing both downloaded files:
 
-- Apple M1, M2, M3, M4, or newer Apple chip: download the `aarch64` DMG;
-- Intel processor: download the `x86_64` DMG.
-
-The manual **Build macOS package** GitHub Actions workflow produces both DMGs
-and a `.sha256` file for each. Download and extract the artifact matching your
-Mac before continuing.
-
-## Verify the download
-
-From Terminal, calculate the checksum of the downloaded image:
-
-```bash
-shasum -a 256 ~/Downloads/bunch-of-keys_1.7.0_aarch64.dmg
+```sh
+shasum -a 256 -c bunch-of-keys_2.0.0_arm64.dmg.sha256
 ```
 
-Use `x86_64` in the filename on an Intel Mac. Compare the resulting hash with
-the contents of the accompanying `.sha256` file. A matching checksum detects a
-damaged or changed download, but because the build is unsigned it does not
-prove the identity of its publisher.
+Substitute x86_64 for an Intel download. The checksum detects download errors;
+it is only as trustworthy as the source from which you obtained it.
+Open the DMG and drag bunch-of-keys.app into Applications.
 
-## Install the application
+Current locally built packages are ad-hoc signed and are not notarized.
+If Gatekeeper blocks the app, use System Settings → Privacy & Security →
+Open Anyway after attempting to open it. Only do this for a build you trust.
+Do not disable Gatekeeper system-wide.
 
-1. Open the downloaded DMG.
-2. Drag `bunch-of-keys.app` into the **Applications** folder.
-3. Eject the mounted DMG.
-4. Try to open `bunch-of-keys` from **Applications**.
+## Upgrade from 1.x
 
-macOS will usually refuse this first launch because the application is from an
-unidentified developer. Use one of the following narrowly scoped overrides
-only if you trust the source of the downloaded build.
+Quit the old application before replacing it. Back up
+`~/Library/Application Support/bunch-of-keys/` first. Version 2 discovers the
+existing registry and vaults in the same locations and preserves their encrypted
+format. Choose the existing vault and unlock with the same master password.
+The app UI is native; window size and old webview appearance preferences are
+replaced with native Settings. The 2.x app requires a newer macOS version.
 
-### Recommended Gatekeeper override
+If launch at login was enabled in 1.x, disable it in the old app before replacing
+it, then enable Launch at login in 2.x Settings. This moves startup registration
+from the legacy LaunchAgent to the macOS ServiceManagement Login Item.
 
-1. In Finder, open **Applications**.
-2. Control-click or right-click `bunch-of-keys`, then choose **Open**.
-3. Confirm **Open** in the warning dialog.
+## Remove
 
-If the dialog does not offer **Open**, first attempt a normal launch, then open
-**System Settings → Privacy & Security**. Find the message that
-`bunch-of-keys` was blocked and choose **Open Anyway**, then confirm the next
-prompt. This exception applies to this application rather than disabling
-Gatekeeper for the whole Mac.
-
-### Terminal override
-
-If the Finder and System Settings methods are unavailable, remove the
-quarantine attribute from this application only:
-
-```bash
-xattr -dr com.apple.quarantine "/Applications/bunch-of-keys.app"
-open "/Applications/bunch-of-keys.app"
-```
-
-Check the application path carefully before running the command. Do not use
-`sudo spctl --master-disable` or otherwise disable Gatekeeper globally; that
-would reduce protection for every application on the Mac.
-
-## First launch and updates
-
-The application appears in the menu bar and keeps running there when its
-window is closed. Use the tray menu's **Quit** action to exit completely.
-Enabling **Launch at sign-in** creates the normal per-user macOS autostart
-entry.
-
-To update, quit the application, install the newer `.app` over the existing
-copy in **Applications**, and repeat the per-application Gatekeeper override
-if macOS asks. Vault data is stored separately under:
-
-```text
-~/Library/Application Support/bunch-of-keys/
-```
-
-Replacing the application does not remove that directory. Back it up before a
-manual migration or system reinstall; there is no password-recovery service.
-
-## Uninstall
-
-Quit `bunch-of-keys` and move `/Applications/bunch-of-keys.app` to the Trash.
-If **Launch at sign-in** was enabled, disable it in the application before
-removing the app. Vaults remain in the Application Support directory shown
-above and must be removed separately only if you intentionally want to delete
-them.
+Disable Launch at login in Settings, quit, then remove the app from Applications.
+Your encrypted data stays in Application Support. Remove that directory only if
+you deliberately want to erase your vaults and have made any necessary backups.

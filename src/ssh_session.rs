@@ -38,19 +38,12 @@ const SSH_AGENT_RSA_SHA2_512: u32 = 4;
 
 #[derive(Debug, Error)]
 pub enum SshSessionError {
-    #[cfg(target_os = "linux")]
-    #[error("XDG_RUNTIME_DIR is unavailable; cannot create a private SSH agent socket")]
-    RuntimeDirectoryUnavailable,
     #[error("cannot prepare the private SSH agent runtime directory")]
     RuntimeDirectory,
     #[error("cannot start the private SSH agent")]
     AgentStart,
-    #[error(
-        "no compatible system terminal was found; install xdg-terminal-exec or set BUNCH_OF_KEYS_TERMINAL to a supported terminal"
-    )]
+    #[error("Terminal.app is unavailable")]
     TerminalUnavailable,
-    #[error("BUNCH_OF_KEYS_TERMINAL names an unsupported terminal")]
-    UnsupportedTerminalOverride,
     #[error("the system terminal could not be launched")]
     TerminalLaunch,
 }
@@ -139,11 +132,6 @@ pub struct EphemeralAgent {
 
 impl EphemeralAgent {
     pub fn start(private_key: PrivateKey, comment: String) -> Result<Self, SshSessionError> {
-        #[cfg(target_os = "linux")]
-        let runtime_root = env::var_os("XDG_RUNTIME_DIR")
-            .map(PathBuf::from)
-            .ok_or(SshSessionError::RuntimeDirectoryUnavailable)?;
-        #[cfg(target_os = "macos")]
         let runtime_root = env::temp_dir();
         Self::start_in(&runtime_root, private_key, comment, AGENT_LIFETIME)
     }
@@ -278,6 +266,8 @@ impl EphemeralAgent {
 fn cleanup_session(socket_path: &Path, identity_path: &Path, session_dir: &Path) {
     let _ = fs::remove_file(socket_path);
     let _ = fs::remove_file(identity_path);
+    let _ = fs::remove_file(session_dir.join("ssh-session.command"));
+    let _ = fs::remove_file(session_dir.join("finished"));
     let _ = fs::remove_dir(session_dir);
 }
 
@@ -287,20 +277,9 @@ impl Drop for EphemeralAgent {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum TerminalKind {
-    Xdg,
-    DashE,
-    DoubleDash,
-    Gnome,
-    #[cfg(target_os = "macos")]
-    MacTerminal,
-}
-
 #[derive(Debug, Clone)]
 pub struct TerminalLauncher {
     program: PathBuf,
-    kind: TerminalKind,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -311,40 +290,13 @@ struct CommandSpec {
 
 impl TerminalLauncher {
     pub fn detect() -> Result<Self, SshSessionError> {
-        let path = env::var_os("PATH").unwrap_or_default();
-        if let Some(override_program) = env::var_os("BUNCH_OF_KEYS_TERMINAL") {
-            let program = resolve_program(&override_program, &path)
-                .ok_or(SshSessionError::TerminalUnavailable)?;
-            let kind =
-                terminal_kind(&program).ok_or(SshSessionError::UnsupportedTerminalOverride)?;
-            return Ok(Self { program, kind });
-        }
-        #[cfg(target_os = "macos")]
         if executable(Path::new("/usr/bin/open")) {
-            return Ok(Self {
+            Ok(Self {
                 program: PathBuf::from("/usr/bin/open"),
-                kind: TerminalKind::MacTerminal,
-            });
-        }
-        [
-            "xdg-terminal-exec",
-            "gnome-terminal",
-            "kgx",
-            "x-terminal-emulator",
-            "konsole",
-            "kitty",
-            "alacritty",
-            "foot",
-            "xterm",
-        ]
-        .into_iter()
-        .find_map(|candidate| {
-            find_in_path(candidate, &path).map(|program| Self {
-                kind: terminal_kind(&program).expect("known terminal candidate"),
-                program,
             })
-        })
-        .ok_or(SshSessionError::TerminalUnavailable)
+        } else {
+            Err(SshSessionError::TerminalUnavailable)
+        }
     }
 
     pub fn launch_ssh(
@@ -361,34 +313,15 @@ impl TerminalLauncher {
         spawn_command(spec)
     }
 
-    #[allow(clippy::unnecessary_wraps)] // macOS creates a fallible Terminal command file.
     fn command_spec(
         &self,
         executable: &Path,
         arguments: &[OsString],
     ) -> Result<CommandSpec, SshSessionError> {
-        #[cfg(target_os = "macos")]
-        if self.kind == TerminalKind::MacTerminal {
-            return mac_terminal_command(&self.program, executable, arguments);
-        }
-        let mut args = match self.kind {
-            TerminalKind::Xdg => Vec::new(),
-            TerminalKind::DashE => vec![OsString::from("-e")],
-            TerminalKind::DoubleDash => vec![OsString::from("--")],
-            TerminalKind::Gnome => vec![OsString::from("--wait"), OsString::from("--")],
-            #[cfg(target_os = "macos")]
-            TerminalKind::MacTerminal => unreachable!(),
-        };
-        args.push(executable.as_os_str().to_owned());
-        args.extend_from_slice(arguments);
-        Ok(CommandSpec {
-            program: self.program.clone(),
-            args,
-        })
+        mac_terminal_command(&self.program, executable, arguments)
     }
 }
 
-#[cfg(target_os = "macos")]
 fn mac_terminal_command(
     program: &Path,
     executable: &Path,
@@ -422,7 +355,6 @@ fn mac_terminal_command(
     })
 }
 
-#[cfg(target_os = "macos")]
 fn shell_quote(value: &OsStr) -> String {
     let value = value.to_string_lossy();
     format!("'{}'", value.replace('\'', "'\\''"))
@@ -436,31 +368,6 @@ fn spawn_command(spec: CommandSpec) -> Result<Child, SshSessionError> {
         .stderr(Stdio::null())
         .spawn()
         .map_err(|_| SshSessionError::TerminalLaunch)
-}
-
-fn terminal_kind(program: &Path) -> Option<TerminalKind> {
-    match program.file_name()?.to_str()? {
-        "xdg-terminal-exec" => Some(TerminalKind::Xdg),
-        "x-terminal-emulator" | "konsole" | "alacritty" | "xterm" => Some(TerminalKind::DashE),
-        "gnome-terminal" | "kgx" => Some(TerminalKind::Gnome),
-        "kitty" | "foot" => Some(TerminalKind::DoubleDash),
-        _ => None,
-    }
-}
-
-fn resolve_program(program: &OsStr, path: &OsStr) -> Option<PathBuf> {
-    let candidate = PathBuf::from(program);
-    if candidate.components().count() > 1 {
-        executable(&candidate).then_some(candidate)
-    } else {
-        find_in_path(program, path)
-    }
-}
-
-fn find_in_path(program: impl AsRef<OsStr>, path: &OsStr) -> Option<PathBuf> {
-    env::split_paths(path)
-        .map(|directory| directory.join(program.as_ref()))
-        .find(|candidate| executable(candidate))
 }
 
 fn executable(path: &Path) -> bool {
@@ -555,14 +462,29 @@ fn parse_helper_request(mut arguments: impl Iterator<Item = OsString>) -> Option
     })
 }
 
+struct HelperCompletion(PathBuf);
+impl Drop for HelperCompletion {
+    fn drop(&mut self) {
+        use std::os::unix::fs::OpenOptionsExt;
+        if let Some(parent) = self.0.parent() {
+            let _ = fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .mode(0o600)
+                .open(parent.join("finished"));
+        }
+    }
+}
+
 pub fn run_terminal_helper_if_requested() -> Option<i32> {
     let request = parse_helper_request(env::args_os())?;
-    let path = env::var_os("PATH").unwrap_or_default();
-    let Some(ssh) = find_in_path("ssh", &path) else {
+    let completion = HelperCompletion(request.socket_path.clone());
+    let ssh = Path::new("/usr/bin/ssh");
+    if !executable(ssh) {
         eprintln!("bunch-of-keys: the system ssh executable was not found.");
         pause_after_failure();
         return Some(127);
-    };
+    }
     let status = Command::new(ssh)
         .args(ssh_arguments(
             &request.socket_path,
@@ -572,6 +494,7 @@ pub fn run_terminal_helper_if_requested() -> Option<i32> {
             request.port,
         ))
         .status();
+    drop(completion);
     match status {
         Ok(status) if status.success() => Some(0),
         Ok(status) => {
@@ -597,10 +520,23 @@ fn pause_after_failure() {
 pub fn monitor_terminal(
     mut child: Child,
     cancel: watch::Sender<bool>,
+    socket_path: PathBuf,
     on_exit: impl FnOnce() + Send + 'static,
 ) {
     thread::spawn(move || {
-        let _ = child.wait();
+        let finished = socket_path.with_file_name("finished");
+        loop {
+            if child.try_wait().is_ok_and(|status| status.is_some()) {
+                break;
+            }
+            if finished.exists() || !socket_path.exists() || *cancel.borrow() {
+                // Stop only the open -W proxy; Terminal and its error output stay visible.
+                let _ = child.kill();
+                let _ = child.wait();
+                break;
+            }
+            thread::sleep(Duration::from_millis(100));
+        }
         let _ = cancel.send(true);
         on_exit();
     });
@@ -614,34 +550,53 @@ mod tests {
     use super::*;
 
     #[test]
-    fn command_construction_keeps_untrusted_values_as_structured_arguments() {
-        let launcher = TerminalLauncher {
-            program: PathBuf::from("/usr/bin/xdg-terminal-exec"),
-            kind: TerminalKind::Xdg,
-        };
-        let arguments = helper_arguments(
-            Path::new("/run/user/1000/bunch-of-keys/agent socket"),
-            Path::new("/run/user/1000/bunch-of-keys/identity.pub"),
+    fn helper_completion_releases_agent_without_waiting_for_terminal_app_exit() {
+        let directory = tempdir().unwrap();
+        let key = PrivateKey::random(&mut OsRng, Algorithm::Ed25519).unwrap();
+        let agent = EphemeralAgent::start_for_test(directory.path(), key).unwrap();
+        let socket = agent.socket_path().to_owned();
+        let proxy = Command::new("/bin/sleep").arg("60").spawn().unwrap();
+        let (sent, received) = std::sync::mpsc::channel();
+        monitor_terminal(
+            proxy,
+            agent.cancellation_sender(),
+            socket.clone(),
+            move || {
+                let _ = sent.send(());
+            },
+        );
+        drop(HelperCompletion(socket.clone()));
+        received.recv_timeout(Duration::from_secs(3)).unwrap();
+        agent.stop();
+        assert!(!socket.exists());
+        assert!(!socket.with_file_name("finished").exists());
+    }
+
+    #[test]
+    fn terminal_script_quotes_paths_and_host_as_literal_arguments() {
+        let directory = tempdir().unwrap();
+        let args = helper_arguments(
+            &directory.path().join("agent.sock"),
+            &directory.path().join("identity.pub"),
             "deploy",
-            "host;touch-pwned",
+            "host;touch-pwned'",
             Some(2222),
         );
-        let spec = launcher
-            .command_spec(Path::new("/usr/bin/bunch-of-keys"), &arguments)
-            .unwrap();
-
-        assert_eq!(spec.program, Path::new("/usr/bin/xdg-terminal-exec"));
-        assert_eq!(spec.args[0], "/usr/bin/bunch-of-keys");
-        assert_eq!(spec.args[1], SSH_HELPER_ARGUMENT);
-        assert_eq!(spec.args[4], "deploy");
-        assert_eq!(spec.args[5], "host;touch-pwned");
+        let spec = mac_terminal_command(
+            Path::new("/usr/bin/open"),
+            Path::new("/Applications/Bunch of Keys.app/Contents/MacOS/bunch-of-keys-core"),
+            &args,
+        )
+        .unwrap();
+        let script = fs::read_to_string(spec.args.last().unwrap()).unwrap();
+        assert!(script.contains("'host;touch-pwned'\\''"));
         assert!(
-            !spec
-                .args
-                .iter()
-                .any(|argument| argument == "sh" || argument == "-c")
+            script.contains(
+                "exec '/Applications/Bunch of Keys.app/Contents/MacOS/bunch-of-keys-core'"
+            )
         );
-        let request = parse_helper_request(spec.args.into_iter()).unwrap();
+        let request =
+            parse_helper_request(std::iter::once(OsString::from("core")).chain(args)).unwrap();
         let ssh_args = ssh_arguments(
             &request.socket_path,
             &request.identity_path,
@@ -649,12 +604,9 @@ mod tests {
             &request.address,
             request.port,
         );
-        assert_eq!(ssh_args.last().unwrap(), "deploy@host;touch-pwned");
+        assert_eq!(ssh_args.last().unwrap(), "deploy@host;touch-pwned'");
         assert!(ssh_args.contains(&OsString::from("ForwardAgent=no")));
         assert!(ssh_args.contains(&OsString::from("IdentitiesOnly=yes")));
-        assert!(ssh_args.contains(&OsString::from(
-            "IdentityFile=/run/user/1000/bunch-of-keys/identity.pub"
-        )));
     }
 
     #[test]
@@ -682,7 +634,7 @@ mod tests {
                 .await
                 .unwrap();
             assert_eq!(signature.algorithm(), Algorithm::Ed25519);
-            assert!(!signature.as_bytes().is_empty());
+            assert_ne!(signature.as_bytes().len(), 0);
         });
     }
 
@@ -762,12 +714,11 @@ mod tests {
     }
 
     #[test]
-    fn unsupported_terminal_overrides_fail_without_a_shell_fallback() {
-        assert_eq!(terminal_kind(Path::new("/usr/bin/custom-terminal")), None);
+    fn missing_terminal_fails_without_a_shell_fallback() {
         assert!(matches!(
             spawn_command(CommandSpec {
                 program: PathBuf::from("/definitely/missing/terminal"),
-                args: Vec::new(),
+                args: Vec::new()
             }),
             Err(SshSessionError::TerminalLaunch)
         ));

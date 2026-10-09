@@ -1,139 +1,81 @@
 # User guide
 
-This guide describes the user-facing behavior in `bunch-of-keys` 1.7.0.
+bunch-of-keys 2.0.0 requires macOS 14+. All credential data stays on your Mac.
 
-For installation on Apple Silicon or Intel Macs, including the required
-per-application Gatekeeper override for the unsigned build, see
-[Installing on macOS](INSTALL_MACOS.md).
+## Vaults and navigation
 
-## Vaults
+On first launch, enter a vault name and a master password of at least eight
+characters, then confirm it. There is no password recovery. Existing vaults
+appear in the unlock screen: choose one, enter its password, and press Return.
+Create another through File → New Vault or the toolbar’s + menu.
+Switching vaults locks the current one and requires the next vault's password.
 
-Each vault is independent and protected by its own master password. The vault
-selector exposes only the vault UUID and user-chosen display name before
-unlocking; group names, entry names, field labels, field values, and SSH keys
-remain encrypted.
+One compact tree contains nested groups, entries and their fields. Use the disclosure triangles
+and arrow keys to navigate. Return expands or collapses a group or entry. Double-click an entry to edit it. Command-E edits
+the selection. Right-click for field actions, editing and deletion. The toolbar’s + menu is
+the single on-screen place to create entries, groups and vaults. Backspace requests
+confirmation before deleting a selected item and its contents.
 
-## Vault tree
+Command-N creates an entry and Shift-Command-N creates a group. New items use
+the selected group, or the selected entry's parent, as their destination.
+Drag a tree item onto a group to move it inside, or between rows to reorder.
+Moves that create cycles are rejected. Search matches names, labels, visible
+values, and SSH connection metadata. Masked values are excluded. Clear search
+before rearranging the tree so all destination positions are visible.
 
-Groups and entries are collapsed by default. Click a group or entry header to
-show or hide its contents. Only one inline draft or editor can be open at a
-time.
+## Entries and fields
 
-The last group opened through its header or disclosure control becomes the
-active group. The header Add menu creates its next group or entry there.
-Collapsing the active group or one of its ancestors clears that target, as does
-a click elsewhere in the tree outside the group and its descendants. After it
-is cleared, the header Add menu targets the vault root. A group's own Add menu
-always targets that group.
+Expand an entry to see its fields directly beneath its name. Click a value or its Copy button to copy it.
+The eye explicitly reveals or hides a masked value. The URL button opens a
+validated HTTP(S) address in your default browser. Select fields with the
+keyboard: Return copies Text/Secret fields, opens URLs, or connects SSH fields.
 
-Before saving a new group or entry, drag its header onto another group or the
-root to change its destination. Saved nodes can be dropped before or after
-another node, inside a group, or at the root. Moving a group into itself or one
-of its descendants is rejected.
+Drag a field between its siblings to reorder it without revealing secrets.
+Use Edit to change the name, field labels, kinds, values, and masking. Text,
+Secret, URL, and SSH are supported. Secret defaults to masked; Text and URL can
+also be masked. Text values support multiple lines. In the editor, drag the grip
+to reorder fields, use the trash button to remove one, and Add Field to add one.
+Drag Move draft into the tree to choose a destination for an unsaved entry
+or group. You can also drag the draft’s tree row. The inline editor stays open with all unsaved values. Save encrypts
+and persists the complete edit. Cancel discards the draft; edited
+entries request confirmation before discarding any changed fields, names or ordering.
 
-Entry fields can be reordered by dragging their grip controls while the entry
-is being edited. Vaults created by older versions remain compatible: the
-retired `Note` field type loads as `Text` without changing its label or value.
+Vault → SSH Keys lets you paste or import named OpenSSH private keys. Existing
+keys display their algorithm, fingerprint and encryption status. Leave the key
+box empty when renaming a key; a replacement keeps all connection references.
+A referenced key cannot be deleted until its SSH fields are removed or updated.
+SSH fields store user, host, optional port and a key reference. The Terminal
+button launches the system OpenSSH client through an ephemeral one-key agent.
+Encrypted OpenSSH keys request their passphrase for each connection. Host-key
+confirmation and server prompts remain in Terminal. SSH failures stay visible
+until Enter is pressed. Agents stop on locking, exit or their bounded timeout.
 
-Every hierarchy level uses the same horizontal step. Entry cards are indented
-as containers alongside nested groups, and their credential containers use one
-matching additional step.
+File → Import YAML (Shift-Command-I) opens the native file picker and imports
+nested groups and entries into the unlocked vault. The importer identifies
+password-like values and URLs automatically. Existing contents are retained.
 
-## Keyboard navigation
+## Settings and desktop behavior
 
-The tree exposes a single keyboard selection across visible groups, entries,
-and fields inside expanded entries. The current tree item receives focus as
-soon as an unlocked vault opens, so navigation does not require an initial
-mouse click:
+Open Settings with Command-Comma. Choose System, Light or Dark appearance.
+On macOS 26+, Liquid Glass enables a translucent background across the main and
+Settings windows, including the title bar, and native glass surfaces. The
+background blurs content behind the window while text and controls remain
+sharp. Disabling Liquid Glass or enabling macOS Reduce Transparency restores
+an opaque window. Native system controls retain their macOS styling.
 
-- `ArrowUp` and `ArrowDown` move in visual order;
-- `ArrowRight` expands the selected group or entry;
-- `ArrowLeft` collapses an expanded group or entry; from child content or an
-  already-collapsed item it first moves to the containing entry or group, so a
-  repeated press can collapse that container;
-- `Enter` toggles a selected group or entry;
-- `Enter` on a field performs that field's action.
+Set inactivity locking between 1 minute and 24 hours, and clipboard clearing
+between 5 seconds and 1 hour. Clearing applies only while the clipboard still
+belongs to the app; copying unrelated content prevents its removal. The vault
+also locks when the Mac or display sleeps or the login session becomes inactive.
+Shift-Command-L locks immediately. Closing the window keeps the app in the menu
+bar. The menu bar offers Open, Lock, Settings and Quit; quitting locks first.
+Launch at login uses macOS Login Items and starts hidden in the menu bar. If macOS requires approval, Settings
+provides a link to the system Login Items page.
 
-Keyboard selection uses a compact blue indicator on the active row's left edge
-and survives tree re-rendering caused by expansion or collapse. Switching back
-to the mouse removes the keyboard indicator. Non-editable interface text is
-not selectable; normal selection remains available inside text inputs and text
-areas.
+## Backups
 
-## Field actions
-
-- `Text` and `Secret` fields copy their values through the Rust backend.
-- `Secret` fields are masked until their eye control is used.
-- `URL` fields open validated `http://` or `https://` destinations in the
-  system browser.
-- `SSH` fields launch the configured connection in the system terminal. See
-  [SSH key design](SSH_KEYS_V2.md) for the complete workflow and security
-  model.
-
-The clipboard is cleared after the configured timeout only if it still
-contains the value copied by `bunch-of-keys`, so newer clipboard contents are
-not deleted.
-
-## Search
-
-Search covers group names, entry names, field labels, and non-masked values.
-Masked values are not sent to frontend search.
-
-## Settings and appearance
-
-The settings dialog controls:
-
-- launch at sign-in;
-- automatic locking after 1, 5, 15, or 60 minutes of inactivity;
-- clipboard clearing after 10, 30, 60, or 120 seconds;
-- YAML import into the vault root.
-
-The theme menu is available in every application state. `System` follows live
-operating-system appearance changes, while `Light` and `Dark` remain fixed
-until another mode is selected.
-
-## Window and tray behavior
-
-The unlocked workspace opens at the application's minimum size of 440 × 480
-logical pixels and can be resized up. At narrow widths the search field moves
-below the title-bar actions while the minimize and hide-to-tray controls remain
-available. Setup and unlock views size themselves to their content.
-
-Closing the window hides it instead of quitting. A left click on the tray icon
-shows and focuses the main window. The tray menu provides `Open
-bunch-of-keys`, `Lock vault`, and `Quit` actions.
-
-On macOS, `bunch-of-keys` appears in the menu bar. SSH actions open the system
-Terminal application, and URL actions use the default browser. Automatic
-locking on operating-system screen-lock and suspend notifications is currently
-available only on Linux; inactivity locking remains available on both
-platforms.
-
-## YAML import
-
-A mapping containing only scalar values becomes an entry. A mapping containing
-nested mappings becomes a group. If a mapping contains both, its scalar fields
-are placed in an entry named `General` inside that group. Root-level scalar
-values are also placed in a root `General` entry.
-
-Field names containing words such as `password`, `token`, `secret`, or
-`api-key` are imported as masked `Secret` fields. Labels containing `url` or
-`addr` are imported as `URL` fields when their values start with `http://` or
-`https://`; other values, including multiline values, become `Text` fields.
-The importer sends the selected file contents directly to the backend and does
-not create an intermediate copy on disk.
-
-## Data locations
-
-On Linux, the application follows the XDG base directory specification:
-
-```text
-$XDG_CONFIG_HOME/bunch-of-keys/config.json
-$XDG_DATA_HOME/bunch-of-keys/vaults/<uuid>.bok
-```
-
-When those variables are not set, the conventional `~/.config` and
-`~/.local/share` locations are used.
-
-On macOS, configuration and vaults are stored under
-`~/Library/Application Support/bunch-of-keys/`.
+Back up the entire `~/Library/Application Support/bunch-of-keys/` directory,
+including config.json and vaults. Vault display names and preferences in the
+registry are unencrypted; all vault contents and SSH key documents are encrypted.
+Keep each master password available separately. Copying only a vault file does
+not preserve the registry. There is no cloud backup or recovery service.

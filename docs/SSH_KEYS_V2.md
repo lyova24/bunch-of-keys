@@ -1,6 +1,6 @@
-# SSH private keys: proposed v2 design
+# SSH private keys
 
-Status: implemented and current in version 1.7.0.
+Status: implemented and current in version 2.0.0.
 
 ## Recommendation
 
@@ -29,7 +29,7 @@ stores:
 
 ## User workflow
 
-1. Create or import a named private key from an SSH field editor.
+1. Create or import a named private key in Vault → SSH Keys.
 2. Store an SSH field with user, address, optional port, and the key reference.
 3. Use **Connect via SSH**. Encrypted keys request a masked passphrase in-app.
 4. The app starts an owner-only one-key agent and launches the system `ssh`
@@ -40,11 +40,11 @@ stores:
    If `ssh` exits with an error, the terminal keeps the original output visible
    until Enter is pressed.
 
-On Linux, `xdg-terminal-exec` is preferred. Known terminal emulators are
-supported as direct-argument fallbacks, and `BUNCH_OF_KEYS_TERMINAL` can select
-one explicitly. On macOS, Terminal.app opens a short-lived owner-only command
-file that deletes itself before directly executing the app's SSH helper. The
+On macOS, Terminal.app opens a short-lived owner-only command file that deletes
+itself before directly executing the bundled Rust service's SSH helper. The
 file contains connection metadata but no private-key material or passphrase.
+The helper marks SSH completion in its private directory so the agent can stop
+without waiting for the entire Terminal application to quit.
 
 ## Security properties and limitations
 
@@ -60,23 +60,3 @@ that exposure with:
   directories;
 - disabled SSH forwarding and no private data in argv, environment, clipboard,
   terminal output, or frontend vault state.
-
-## Rejected alternatives
-
-### Temporary private-key files
-
-Writing a key under `$XDG_RUNTIME_DIR` and invoking `ssh -i` is simple and could
-serve as a compatibility fallback. It still creates filesystem material,
-depends on reliable cleanup, and does not help applications that cannot be
-wrapped by the utility.
-
-### Clipboard copy
-
-Copying a private key to the clipboard is both unsafe and inconvenient. It also
-does not integrate with OpenSSH authentication.
-
-### Replacing the SSH client
-
-Embedding a complete SSH client would only help commands launched by this
-application and would duplicate mature OpenSSH behavior. An agent remains the
-smallest interoperable boundary.

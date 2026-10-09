@@ -1,5 +1,22 @@
 # Changelog
 
+## 2.0.0 - 2026-10-09
+
+- Replaced Tauri and the web interface with a native SwiftUI/AppKit macOS
+  application, standard window controls, and one compact tree for groups,
+  entries, fields and inline editors. Added native menus, settings, file panels,
+  a single toolbar creation menu, and direct tree and field drag-and-drop.
+- Added optional native Liquid Glass on macOS 26 and later, with system,
+  light, and dark appearance and accessibility-aware rendering.
+- Applied the Liquid Glass preference to the entire main and Settings windows,
+  including their title bars, with native behind-window blur and an opaque
+  fallback when disabled or Reduce Transparency is enabled.
+- Preserved encrypted vault compatibility, multiple vaults, structured fields,
+  YAML import, reusable SSH keys, and the in-memory SSH agent.
+- Added native clipboard ownership checks, sleep/session locking, and login
+  items through ServiceManagement. Removed Linux and Windows support and
+  replaced packaging and CI with macOS-only builds. Requires macOS 14+.
+
 ## 1.7.1 - 2026-09-29
 
 - Fixed ephemeral SSH agent startup with long macOS temporary paths by using
