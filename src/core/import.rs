@@ -69,6 +69,7 @@ fn mapping_to_node(name: String, mapping: &Mapping) -> Result<Node, ImportError>
         Ok(Node::Group(Group {
             id: Uuid::new_v4(),
             name,
+            tags: Vec::new(),
             children,
         }))
     }
@@ -78,6 +79,7 @@ fn entry_node(name: String, fields: Vec<CredentialField>) -> Node {
     Node::Entry(Entry {
         id: Uuid::new_v4(),
         name,
+        tags: Vec::new(),
         fields,
     })
 }

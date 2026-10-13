@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.0.1 - 2026-10-13
+
+- Added macOS-style colored tags for groups and entries, with visible tag
+  indicators, tag editing, and filtering combined with text search (#41).
+- Keep ancestor groups visible around matches and show descendants of a tagged
+  group; tags stay encrypted, survive edits and moves, and older vaults open
+  with no tags. Clear temporary filters when locking or switching vaults.
+- Added keyboard access to tag filtering: Shift-Tab opens the popover, arrow
+  keys navigate colors, Return toggles tags, and Escape restores the opener's
+  focus.
+- Aligned tag markers to a consistent right margin across nesting depths,
+  window resizing, and scrollbar changes.
+
 ## 2.0.0 - 2026-10-09
 
 - Replaced Tauri and the web interface with a native SwiftUI/AppKit macOS

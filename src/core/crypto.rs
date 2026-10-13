@@ -344,7 +344,7 @@ fn random_bytes<const N: usize>() -> Result<[u8; N], CryptoError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::{FieldInput, FieldKind};
+    use crate::core::{FieldInput, FieldKind, TagColor};
 
     const TEST_KDF: KdfParameters = KdfParameters {
         memory_kib: 8_192,
@@ -386,6 +386,87 @@ mod tests {
         let restored = envelope.unlock(b"a long test passphrase").unwrap();
 
         assert_eq!(restored.data(), &expected);
+    }
+
+    #[test]
+    fn persists_tag_updates_without_exposing_or_changing_credentials() {
+        let mut data = sample_data();
+        let entry_id = data.nodes[0].id();
+        let group_id = data
+            .add_group_with_tags(None, "Tagged group", vec![TagColor::Blue, TagColor::Gray])
+            .unwrap();
+        data.set_node_tags(entry_id, vec![TagColor::Red, TagColor::Orange])
+            .unwrap();
+        data.move_node(entry_id, Some(group_id), 0).unwrap();
+        let mut unlocked =
+            VaultEnvelope::create_with_parameters(b"a long test passphrase", data, TEST_KDF)
+                .unwrap();
+        let mut updated = unlocked.data().clone();
+        updated
+            .set_node_tags(entry_id, vec![TagColor::Purple, TagColor::Green])
+            .unwrap();
+        let envelope = unlocked.prepare_update(&updated).unwrap();
+        unlocked.commit(updated.clone(), envelope);
+        let bytes = unlocked.envelope().to_bytes().unwrap();
+        let envelope_json = String::from_utf8_lossy(&bytes);
+        assert!(!envelope_json.contains("Tagged group"));
+        assert!(!envelope_json.contains("purple"));
+        assert!(!envelope_json.contains("not-a-real-password"));
+        let restored = VaultEnvelope::from_bytes(&bytes)
+            .unwrap()
+            .unlock(b"a long test passphrase")
+            .unwrap();
+
+        assert_eq!(restored.data(), &updated);
+        assert_eq!(restored.data().schema_version, 2);
+    }
+
+    #[test]
+    fn unlocks_legacy_encrypted_payloads_without_tag_fields() {
+        let data = sample_data();
+        let expected = data.clone();
+        let unlocked =
+            VaultEnvelope::create_with_parameters(b"a long test passphrase", data, TEST_KDF)
+                .unwrap();
+        let mut legacy = serde_json::to_value(&expected).unwrap();
+        legacy["nodes"][0].as_object_mut().unwrap().remove("tags");
+        let plaintext = Zeroizing::new(serde_json::to_vec(&legacy).unwrap());
+        let mut envelope = unlocked.envelope().clone();
+        envelope.payload = encrypt_blob(
+            &unlocked.key,
+            &plaintext,
+            associated_data(unlocked.vault_id(), "payload").as_bytes(),
+        )
+        .unwrap();
+        let restored = envelope.unlock(b"a long test passphrase").unwrap();
+
+        assert_eq!(restored.data(), &expected);
+        assert_eq!(restored.data().nodes[0].tags(), []);
+    }
+
+    #[test]
+    fn rejects_duplicate_tags_inside_an_authenticated_encrypted_payload() {
+        let unlocked = VaultEnvelope::create_with_parameters(
+            b"a long test passphrase",
+            sample_data(),
+            TEST_KDF,
+        )
+        .unwrap();
+        let mut invalid = serde_json::to_value(unlocked.data()).unwrap();
+        invalid["nodes"][0]["tags"] = serde_json::json!(["red", "red"]);
+        let plaintext = Zeroizing::new(serde_json::to_vec(&invalid).unwrap());
+        let mut envelope = unlocked.envelope().clone();
+        envelope.payload = encrypt_blob(
+            &unlocked.key,
+            &plaintext,
+            associated_data(unlocked.vault_id(), "payload").as_bytes(),
+        )
+        .unwrap();
+
+        assert!(matches!(
+            envelope.unlock(b"a long test passphrase"),
+            Err(CryptoError::DamagedPayload)
+        ));
     }
 
     #[test]

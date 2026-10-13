@@ -43,9 +43,10 @@ bash scripts/test-native.sh
 
 Rust tests cover encryption, model validation, compatibility, storage and SSH
 agent cleanup. Swift integration tests exercise the actual bundled pipe service,
-masking, copying, URLs, field reordering, tree moves, YAML import, SSH key
-references, preferences, and persistence after a full process restart. Native
-store tests verify clipboard ownership, clearing on lock, and protection from
+masking, copying, URLs, field reordering, tree moves, colored tag mutations,
+legacy decoding and filtering, YAML import, SSH key references, preferences,
+and persistence after a full process restart. Native store tests verify tag
+filter cleanup, clipboard ownership, clearing on lock, and protection from
 late reveal responses on a private test pasteboard.
 Visually verify native windows, editing, drag-and-drop, lock/unlock, Settings,
 appearance and Liquid Glass using synthetic data before shipping UI changes.
@@ -56,7 +57,7 @@ appearance and Liquid Glass using synthetic data before shipping UI changes.
 bash scripts/build-macos.sh --dmg
 ```
 
-The result is `dist/bunch-of-keys_2.0.0_<arch>.dmg` plus its SHA-256 checksum.
+The result is `dist/bunch-of-keys_2.0.1_<arch>.dmg` plus its SHA-256 checksum.
 Set BOK_ARCH=arm64 or BOK_ARCH=x86_64 to cross-build another architecture after
 installing the matching Rust target with rustup. The script signs locally with
 an ad-hoc identity by default. Set BOK_SIGN_IDENTITY to a Developer ID identity

@@ -1,6 +1,6 @@
 # User guide
 
-bunch-of-keys 2.0.0 requires macOS 14+. All credential data stays on your Mac.
+bunch-of-keys 2.0.1 requires macOS 14+. All credential data stays on your Mac.
 
 ## Vaults and navigation
 
@@ -21,7 +21,37 @@ the selected group, or the selected entry's parent, as their destination.
 Drag a tree item onto a group to move it inside, or between rows to reorder.
 Moves that create cycles are rejected. Search matches names, labels, visible
 values, and SSH connection metadata. Masked values are excluded. Clear search
-before rearranging the tree so all destination positions are visible.
+and tag filters before rearranging the tree so all destination positions are
+visible.
+
+## Colored tags and filtering
+
+Groups and entries can carry several colored tags: Red, Orange, Yellow, Green,
+Blue, Purple, and Gray. Tags appear next to each item's name and stay with the
+item after renaming, editing, or moving it. Tags are stored inside the encrypted
+vault; existing items start with no tags.
+
+Choose colors under Tags in the group or entry editor, then Save. Use Clear to
+remove all draft tags. Right-click an existing item and open Tags to toggle a
+color immediately or choose Remove All Tags.
+
+Open Filter by Tags beside the search field and select one or more colors. An
+item matches if it has any selected color. A tagged group includes its
+descendants, while parent groups remain visible to preserve the location of
+matching entries. Press Shift-Tab from the search field or vault tree to open
+the filter using the keyboard. Use the arrow keys to move between colors and
+Return to toggle the highlighted color; the popover stays open for selecting
+several tags. Tab and Shift-Tab also navigate the palette. When filters are
+selected, Clear Tag Filters follows Gray and can be activated with Return.
+Escape closes it and returns focus to the control that opened it.
+The initial highlight is the first selected color, or Red when no filters are
+selected. These controls also work after opening the filter with the mouse.
+
+Combine tag filtering with text search to narrow those results: a displayed item must
+also match the search, or contain a descendant that does. Search still excludes
+masked values; a group-name search keeps the matching subtree. Clear filters
+from the filter popover or active-filter strip to show the full tree again.
+Locking or switching vaults clears both search and selected filter colors.
 
 ## Entries and fields
 
@@ -37,8 +67,9 @@ also be masked. Text values support multiple lines. In the editor, drag the grip
 to reorder fields, use the trash button to remove one, and Add Field to add one.
 Drag Move draft into the tree to choose a destination for an unsaved entry
 or group. You can also drag the draft’s tree row. The inline editor stays open with all unsaved values. Save encrypts
-and persists the complete edit. Cancel discards the draft; edited
-entries request confirmation before discarding any changed fields, names or ordering.
+and persists the complete edit. Cancel discards the draft; edited entries and
+groups request confirmation before discarding changed names, fields, ordering,
+or tags.
 
 Vault → SSH Keys lets you paste or import named OpenSSH private keys. Existing
 keys display their algorithm, fingerprint and encryption status. Leave the key

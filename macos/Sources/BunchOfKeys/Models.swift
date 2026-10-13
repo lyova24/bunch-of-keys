@@ -1,4 +1,24 @@
 import Foundation
+import SwiftUI
+import AppKit
+
+enum TagColor: String, Codable, CaseIterable, Identifiable {
+    case red, orange, yellow, green, blue, purple, gray
+    var id: String { rawValue }
+    var title: String { rawValue.capitalized }
+    var nsColor: NSColor {
+        switch self {
+        case .red: return .systemRed
+        case .orange: return .systemOrange
+        case .yellow: return .systemYellow
+        case .green: return .systemGreen
+        case .blue: return .systemBlue
+        case .purple: return .systemPurple
+        case .gray: return .systemGray
+        }
+    }
+    var color: Color { Color(nsColor: nsColor) }
+}
 
 struct VaultSummary: Codable, Identifiable, Equatable {
     var id: String
@@ -42,12 +62,37 @@ struct VaultNode: Decodable, Identifiable, Equatable {
     var type: String
     var children: [VaultNode]?
     var fields: [VaultField]?
+    var tags: [TagColor] = []
+    init(id: String, name: String, type: String, children: [VaultNode]? = nil, fields: [VaultField]? = nil, tags: [TagColor] = []) {
+        self.id = id; self.name = name; self.type = type; self.children = children; self.fields = fields; self.tags = tags
+    }
+    private enum CodingKeys: String, CodingKey { case id, name, type, children, fields, tags }
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        id = try values.decode(String.self, forKey: .id)
+        name = try values.decode(String.self, forKey: .name)
+        type = try values.decode(String.self, forKey: .type)
+        children = try values.decodeIfPresent([VaultNode].self, forKey: .children)
+        fields = try values.decodeIfPresent([VaultField].self, forKey: .fields)
+        tags = try values.decodeIfPresent([TagColor].self, forKey: .tags) ?? []
+    }
     var isGroup: Bool { type == "group" }
     func find(_ id: String) -> VaultNode? {
         if self.id == id { return self }
         return children?.lazy.compactMap { $0.find(id) }.first
     }
-    func filtered(_ query: String) -> VaultNode? {
+    func filtered(_ query: String, tags: Set<TagColor> = [], inheritedTagMatch: Bool = false) -> VaultNode? {
+        // First keep tagged branches, then search within that result. Matching
+        // group names retain the same subtree behavior as ordinary text search.
+        tagged(tags, inheritedMatch: inheritedTagMatch)?.filteredText(query)
+    }
+    private func tagged(_ colors: Set<TagColor>, inheritedMatch: Bool) -> VaultNode? {
+        if colors.isEmpty || inheritedMatch || !colors.isDisjoint(with: tags) { return self }
+        let children = (children ?? []).compactMap { $0.tagged(colors, inheritedMatch: false) }
+        if children.isEmpty { return nil }
+        var node = self; node.children = children; return node
+    }
+    private func filteredText(_ query: String) -> VaultNode? {
         if query.isEmpty { return self }
         let matches = name.localizedCaseInsensitiveContains(query) || (fields ?? []).contains {
             $0.label.localizedCaseInsensitiveContains(query) ||
@@ -56,7 +101,7 @@ struct VaultNode: Decodable, Identifiable, Equatable {
             ($0.ssh?.user.localizedCaseInsensitiveContains(query) ?? false)
         }
         if matches { return self }
-        let children = (children ?? []).compactMap { $0.filtered(query) }
+        let children = (children ?? []).compactMap { $0.filteredText(query) }
         if children.isEmpty { return nil }
         var node = self; node.children = children; return node
     }

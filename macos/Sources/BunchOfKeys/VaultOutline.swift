@@ -5,6 +5,64 @@ private let draftPasteboardType = NSPasteboard.PasteboardType("dev.bunchofkeys.d
 private let nodePasteboardType = NSPasteboard.PasteboardType("dev.bunchofkeys.node")
 private let fieldPasteboardType = NSPasteboard.PasteboardType("dev.bunchofkeys.saved-field")
 
+// A small native view keeps row markers crisp at every display scale and gives
+// VoiceOver the color names as well as the visual indication.
+final class TagDotsView: NSView {
+    let tags: [TagColor]
+    init(tags: [TagColor]) {
+        self.tags = tags
+        super.init(frame: .zero)
+        setAccessibilityElement(true)
+        setAccessibilityRole(.image)
+        setAccessibilityLabel("Tags: \(tags.map(\.title).joined(separator: ", "))")
+    }
+    required init?(coder: NSCoder) { nil }
+    override var intrinsicContentSize: NSSize { NSSize(width: CGFloat(tags.count * 13 - 4), height: 10) }
+    override func draw(_ dirtyRect: NSRect) {
+        for (index, tag) in tags.enumerated() {
+            let circle = NSBezierPath(ovalIn: NSRect(x: CGFloat(index * 13), y: 1, width: 9, height: 9))
+            tag.nsColor.setFill(); circle.fill()
+            NSColor.labelColor.withAlphaComponent(0.16).setStroke(); circle.lineWidth = 0.5; circle.stroke()
+        }
+    }
+}
+extension TagColor {
+    var menuImage: NSImage {
+        let fill = nsColor
+        return NSImage(size: NSSize(width: 14, height: 14), flipped: false) { _ in
+            fill.setFill(); NSBezierPath(ovalIn: NSRect(x: 2, y: 2, width: 10, height: 10)).fill()
+            return true
+        }
+    }
+}
+private extension NSOutlineView {
+    var contentTrailingEdge: CGFloat {
+        guard let viewport = enclosingScrollView?.contentView else { return visibleRect.maxX }
+        return convert(viewport.bounds, from: viewport).maxX
+    }
+}
+final class NodeOutlineCell: NSTableCellView {
+    weak var outline: NSOutlineView?
+    var trailingConstraint: NSLayoutConstraint?
+    init(outline: NSOutlineView) { self.outline = outline; super.init(frame: .zero) }
+    required init?(coder: NSCoder) { nil }
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize); needsLayout = true
+    }
+    override func setFrameOrigin(_ newOrigin: NSPoint) {
+        super.setFrameOrigin(newOrigin); needsLayout = true
+    }
+    override func layout() {
+        if let outline, let trailingConstraint {
+            // Inset root cells end inside the viewport, while indented cells can
+            // extend beyond it. Anchor every tag to the viewport, not the cell.
+            let cellRight = convert(bounds, to: outline).maxX
+            trailingConstraint.constant = outline.contentTrailingEdge - 16 - cellRight
+        }
+        super.layout()
+    }
+}
+
 final class OutlineNode: NSObject {
     let id: String
     var node: VaultNode?
@@ -29,10 +87,13 @@ final class HostedOutlineCell: NSTableCellView {
     override func setFrameSize(_ newSize: NSSize) {
         super.setFrameSize(newSize); needsLayout = true
     }
+    override func setFrameOrigin(_ newOrigin: NSPoint) {
+        super.setFrameOrigin(newOrigin); needsLayout = true
+    }
     override func layout() {
         super.layout()
         let origin = outline.map { convert(bounds, to: $0).minX } ?? 0
-        let available = (outline?.visibleRect.maxX ?? bounds.width) - origin - 12
+        let available = (outline?.contentTrailingEdge ?? bounds.width) - origin - 12
         host.frame = NSRect(x: 0, y: 0, width: max(0, min(bounds.width, available)), height: bounds.height)
     }
 }
@@ -49,25 +110,28 @@ struct VaultOutline: NSViewRepresentable {
     @ObservedObject var store: AppStore
     func makeCoordinator() -> Coordinator { Coordinator(store) }
     func makeNSView(context: Context) -> NSScrollView {
+        Self.makeScrollView(coordinator: context.coordinator)
+    }
+    static func makeScrollView(coordinator: Coordinator) -> NSScrollView {
         let outline = VaultOutlineView()
         let column = NSTableColumn(identifier: .init("credentials")); column.title = "Credentials"
         column.resizingMask = .autoresizingMask
         outline.autoresizingMask = [.width]
         outline.columnAutoresizingStyle = .lastColumnOnlyAutoresizingStyle
         outline.addTableColumn(column); outline.outlineTableColumn = column; outline.headerView = nil
-        outline.dataSource = context.coordinator; outline.delegate = context.coordinator
+        outline.dataSource = coordinator; outline.delegate = coordinator
         outline.rowSizeStyle = .medium; outline.indentationPerLevel = 14
         outline.style = .inset; outline.selectionHighlightStyle = .regular
         outline.backgroundColor = .clear; outline.focusRingType = .none
         outline.registerForDraggedTypes([nodePasteboardType, draftPasteboardType, fieldPasteboardType])
         outline.setDraggingSourceOperationMask(.move, forLocal: true)
-        outline.target = context.coordinator; outline.doubleAction = #selector(Coordinator.doubleClick)
-        outline.activate = { [weak coordinator = context.coordinator] in coordinator?.activate() }
-        outline.delete = { [weak coordinator = context.coordinator] in coordinator?.contextItem = nil; coordinator?.remove() }
-        let menu = NSMenu(); menu.delegate = context.coordinator; outline.menu = menu
+        outline.target = coordinator; outline.doubleAction = #selector(Coordinator.doubleClick)
+        outline.activate = { [weak coordinator] in coordinator?.activate() }
+        outline.delete = { [weak coordinator] in coordinator?.contextItem = nil; coordinator?.remove() }
+        let menu = NSMenu(); menu.delegate = coordinator; outline.menu = menu
         let scroll = NSScrollView(); scroll.documentView = outline; scroll.hasVerticalScroller = true
         scroll.drawsBackground = false; scroll.autohidesScrollers = true
-        context.coordinator.outline = outline
+        coordinator.outline = outline
         return scroll
     }
     func updateNSView(_ scroll: NSScrollView, context: Context) { context.coordinator.update(store.filteredNodes) }
@@ -78,6 +142,7 @@ struct VaultOutline: NSViewRepresentable {
         var roots: [OutlineNode] = []
         var boxes: [String: OutlineNode] = [:]
         var previous: [VaultNode] = []
+        var previouslyFiltering = false
         var editorSignature = ""
         var editorHost: NSHostingView<InlineEditor>?
         var expanded = Set<String>()
@@ -92,9 +157,9 @@ struct VaultOutline: NSViewRepresentable {
             let signature = route.map { "\($0.id):\($0.parentId ?? "root"):\($0.insertionIndex ?? -1)" } ?? ""
             updating = true; defer { updating = false }
             let selectedItem = outline.item(atRow: outline.selectedRow) as? OutlineNode
-            if previous != nodes || signature != editorSignature {
+            if previous != nodes || signature != editorSignature || previouslyFiltering != store.isFiltering {
                 let oldRoute = editorHost?.rootView.routeId
-                previous = nodes; editorSignature = signature
+                previous = nodes; editorSignature = signature; previouslyFiltering = store.isFiltering
                 var next: [String: OutlineNode] = [:]
                 func box(_ id: String) -> OutlineNode {
                     let item = boxes[id] ?? OutlineNode(id)
@@ -148,7 +213,7 @@ struct VaultOutline: NSViewRepresentable {
                 outline.reloadData()
                 // Expanding ancestors first also restores nested entries after a reload.
                 func restore(_ items: [OutlineNode]) {
-                    for item in items where expanded.contains(item.id) || !store.search.isEmpty {
+                    for item in items where expanded.contains(item.id) || !store.search.isEmpty || (store.isFiltering && item.node?.isGroup == true) {
                         outline.expandItem(item); restore(item.children)
                     }
                 }
@@ -207,8 +272,8 @@ struct VaultOutline: NSViewRepresentable {
         func outlineView(_ outlineView: NSOutlineView, heightOfRowByItem item: Any) -> CGFloat {
             guard let item = item as? OutlineNode else { return 30 }
             if item.isEditor {
-                if case .group = item.route?.kind { return 200 }
-                return 380
+                if case .group = item.route?.kind { return 300 }
+                return 480
             }
             if let field = item.field {
                 if field.ssh != nil { return 72 }
@@ -228,7 +293,7 @@ struct VaultOutline: NSViewRepresentable {
                 host.sizingOptions = []
                 return HostedOutlineCell(host: host, outline: outlineView)
             }
-            let cell = NSTableCellView()
+            let cell = NodeOutlineCell(outline: outlineView)
             let group: Bool
             if let node = item.node { group = node.isGroup }
             else if case .group = item.route?.kind { group = true }
@@ -239,13 +304,30 @@ struct VaultOutline: NSViewRepresentable {
             let text = NSTextField(labelWithString: name); text.lineBreakMode = .byTruncatingTail; text.font = .systemFont(ofSize: NSFont.systemFontSize)
             image.translatesAutoresizingMaskIntoConstraints = false; text.translatesAutoresizingMaskIntoConstraints = false
             cell.addSubview(image); cell.addSubview(text); cell.imageView = image; cell.textField = text
-            NSLayoutConstraint.activate([
+            var constraints = [
                 image.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 2), image.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
                 image.widthAnchor.constraint(equalToConstant: 18), image.heightAnchor.constraint(equalToConstant: 18),
-                text.leadingAnchor.constraint(equalTo: image.trailingAnchor, constant: 8), text.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -4),
+                text.leadingAnchor.constraint(equalTo: image.trailingAnchor, constant: 8),
                 text.centerYAnchor.constraint(equalTo: cell.centerYAnchor)
-            ])
-            cell.setAccessibilityLabel(name); return cell
+            ]
+            let tags = item.node?.tags ?? []
+            if !tags.isEmpty {
+                let dots = TagDotsView(tags: tags); dots.translatesAutoresizingMaskIntoConstraints = false
+                dots.setContentHuggingPriority(.required, for: .horizontal)
+                dots.setContentCompressionResistancePriority(.required, for: .horizontal)
+                cell.addSubview(dots)
+                cell.trailingConstraint = dots.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -6)
+                constraints += [cell.trailingConstraint!,
+                                dots.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+                                text.trailingAnchor.constraint(equalTo: dots.leadingAnchor, constant: -10)]
+                cell.setAccessibilityLabel("\(name), tags: \(tags.map(\.title).joined(separator: ", "))")
+            } else {
+                cell.trailingConstraint = text.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -6)
+                constraints.append(cell.trailingConstraint!)
+                cell.setAccessibilityLabel(name)
+            }
+            NSLayoutConstraint.activate(constraints)
+            return cell
         }
         func outlineViewSelectionDidChange(_ notification: Notification) {
             guard !updating, let outline else { return }
@@ -285,11 +367,23 @@ struct VaultOutline: NSViewRepresentable {
         @objc func copyField() { if let item = contextItem, let field = item.field, let entry = item.entryId { store.copy(entry: entry, field: field.id) } }
         @objc func revealField() { if let item = contextItem, let field = item.field, let entry = item.entryId { store.reveal(entry: entry, field: field.id) } }
         @objc func openField() { if let item = contextItem, let field = item.field, let entry = item.entryId { performFieldAction(field, entry: entry) } }
+        @objc func toggleTag(_ sender: NSMenuItem) {
+            guard !store.busy, store.editor == nil, let node = contextItem?.node,
+                  let value = sender.representedObject as? String, let tag = TagColor(rawValue: value) else { return }
+            store.toggleTag(tag, for: node)
+        }
+        @objc func removeTags() {
+            guard !store.busy, store.editor == nil, let node = contextItem?.node else { return }
+            Task { await store.setTags([], for: node) }
+        }
         func menuNeedsUpdate(_ menu: NSMenu) {
-            menu.removeAllItems()
             guard let outline else { return }
-            contextItem = outline.item(atRow: outline.clickedRow) as? OutlineNode
-            guard let item = contextItem, !item.isEditor, item.route == nil else { return }
+            let row = outline.clickedRow >= 0 ? outline.clickedRow : outline.selectedRow
+            populateMenu(menu, for: outline.item(atRow: row) as? OutlineNode)
+        }
+        func populateMenu(_ menu: NSMenu, for item: OutlineNode?) {
+            menu.removeAllItems(); menu.autoenablesItems = false; contextItem = item
+            guard let item, !item.isEditor, item.route == nil else { return }
             func add(_ title: String, _ action: Selector) {
                 let actionItem = NSMenuItem(title: title, action: action, keyEquivalent: ""); actionItem.target = self
                 actionItem.isEnabled = !store.busy && store.editor == nil; menu.addItem(actionItem)
@@ -302,10 +396,28 @@ struct VaultOutline: NSViewRepresentable {
                 menu.addItem(.separator())
             }
             add("Edit…", #selector(editNode))
-            if item.node != nil { add("Delete…", #selector(remove)) }
+            if let node = item.node {
+                let tagsItem = NSMenuItem(title: "Tags", action: nil, keyEquivalent: "")
+                tagsItem.image = NSImage(systemSymbolName: "tag", accessibilityDescription: "Tags")
+                tagsItem.isEnabled = !store.busy && store.editor == nil
+                let tagsMenu = NSMenu(title: "Tags"); tagsMenu.autoenablesItems = false
+                for tag in TagColor.allCases {
+                    let tagItem = NSMenuItem(title: tag.title, action: #selector(toggleTag(_:)), keyEquivalent: "")
+                    tagItem.target = self; tagItem.representedObject = tag.rawValue; tagItem.image = tag.menuImage
+                    tagItem.state = node.tags.contains(tag) ? .on : .off
+                    tagItem.isEnabled = !store.busy && store.editor == nil
+                    tagsMenu.addItem(tagItem)
+                }
+                tagsMenu.addItem(.separator())
+                let clearItem = NSMenuItem(title: "Remove All Tags", action: #selector(removeTags), keyEquivalent: "")
+                clearItem.target = self; clearItem.isEnabled = !node.tags.isEmpty && !store.busy && store.editor == nil
+                tagsMenu.addItem(clearItem); tagsItem.submenu = tagsMenu; menu.addItem(tagsItem)
+                menu.addItem(.separator())
+                add("Delete…", #selector(remove))
+            }
         }
         func outlineView(_ outlineView: NSOutlineView, pasteboardWriterForItem item: Any) -> NSPasteboardWriting? {
-            guard store.search.isEmpty, !store.busy, let node = item as? OutlineNode, !node.isEditor else { return nil }
+            guard !store.isFiltering, !store.busy, let node = item as? OutlineNode, !node.isEditor else { return nil }
             let item = NSPasteboardItem()
             if let route = node.route {
                 item.setData(Data(route.id.uuidString.utf8), forType: draftPasteboardType)
@@ -318,7 +430,7 @@ struct VaultOutline: NSViewRepresentable {
             return item
         }
         func outlineView(_ outlineView: NSOutlineView, validateDrop info: NSDraggingInfo, proposedItem item: Any?, proposedChildIndex index: Int) -> NSDragOperation {
-            guard store.search.isEmpty, !store.busy else { return [] }
+            guard !store.isFiltering, !store.busy else { return [] }
             let target = item as? OutlineNode
             if let draft = info.draggingPasteboard.data(forType: draftPasteboardType), String(data: draft, encoding: .utf8) == store.editor?.id.uuidString {
                 if let target, target.node?.isGroup != true { return [] }

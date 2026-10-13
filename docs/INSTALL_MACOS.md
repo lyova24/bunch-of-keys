@@ -1,6 +1,6 @@
 # Installing on macOS
 
-Version 2.0.0 supports macOS 14 Sonoma or later. Liquid Glass requires macOS 26.
+Version 2.0.1 supports macOS 14 Sonoma or later. Liquid Glass requires macOS 26.
 Choose arm64 for Apple Silicon (M-series) or x86_64 for Intel (Apple menu →
 About This Mac). Download the matching DMG and SHA-256 file from the package
 workflow artifacts or a release, when available.
@@ -10,7 +10,7 @@ workflow artifacts or a release, when available.
 In the directory containing both downloaded files:
 
 ```sh
-shasum -a 256 -c bunch-of-keys_2.0.0_arm64.dmg.sha256
+shasum -a 256 -c bunch-of-keys_2.0.1_arm64.dmg.sha256
 ```
 
 Substitute x86_64 for an Intel download. The checksum detects download errors;

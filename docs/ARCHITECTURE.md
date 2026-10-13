@@ -1,6 +1,6 @@
 # Architecture
 
-Version 2.0.0 is macOS-only. The presentation layer is SwiftUI/AppKit, built
+Version 2.0.1 is macOS-only. The presentation layer is SwiftUI/AppKit, built
 against the macOS SDK with a macOS 14 deployment target. There is no webview,
 HTML/JavaScript frontend, or Tauri runtime.
 
@@ -31,14 +31,21 @@ and active connections. A generation counter rejects late responses after
 locking. SwiftUI uses one native outline for groups, entries, fields and inline
 editors, forms, commands, Settings and MenuBarExtra. AppKit's NSOutlineView supplies native
 hierarchical keyboard navigation, selection, context menus, and direct moves.
-Search disables ordering operations because filtered indices are ambiguous.
+Search and tag filters disable ordering operations because filtered indices are
+ambiguous.
 Field editors use direct drag-and-drop and preserve stable field identities.
+
+Groups and entries carry a validated set of seven color tags in the encrypted
+payload and masked view. Tags default to empty when decoding older vaults.
+The native tree combines an OR across selected colors with text search; tag
+matches on a group include descendants, and ancestors of matching items remain
+visible. Filters are temporary session state and clear on lock or vault change.
 
 Only one vault can be unlocked at a time. Model changes clone the current data,
 validate, encrypt, atomically persist, and then commit the in-memory update.
-Names, fields, and SSH key documents remain encrypted. Ordinary view responses
-contain no masked values or private key documents. Explicit reveal, edit and
-copy actions request field values separately. The native pasteboard clears only
+Names, fields, tags, and SSH key documents remain encrypted. Ordinary view
+responses contain no masked values or private key documents. Explicit reveal,
+edit and copy actions request field values separately. The native pasteboard clears only
 while its change counter still matches the app's write. Locking clears pending
 clipboard data owned by the app as well as reveals, drafts, and active agents.
 

@@ -21,6 +21,7 @@ struct EditorRoute: Identifiable {
     @Published var selectedVaultId = ""
     @Published var selection: String?
     @Published var search = ""
+    @Published var tagFilter = Set<TagColor>()
     @Published var revealed: [String: String] = [:]
     @Published var activeSSH = Set<String>()
     @Published var busy = false
@@ -42,13 +43,23 @@ struct EditorRoute: Identifiable {
     private var lastTouch = Date.distantPast
     private var clipboardChange: Int?
     private var clipboardTask: Task<Void, Never>?
-    var selectedNode: VaultNode? { vault?.node(selection) }
+    var selectedNode: VaultNode? {
+        guard let node = vault?.node(selection),
+              !isFiltering || filteredNodes.contains(where: { $0.find(node.id) != nil }) else { return nil }
+        return node
+    }
     var vaultName: String { vaults.first { $0.id == vault?.id }?.name ?? "Vault" }
     var destination: String? {
         guard let node = selectedNode else { return nil }
         return node.isGroup ? node.id : vault?.parent(of: node.id)
     }
-    var filteredNodes: [VaultNode] { (vault?.nodes ?? []).compactMap { $0.filtered(search) } }
+    var isFiltering: Bool { !search.isEmpty || !tagFilter.isEmpty }
+    var canFilterTags: Bool {
+        ready && serviceAvailable && vault != nil && !busy && editor == nil &&
+        !showingKeys && sshPrompt == nil && deleteTarget == nil && error == nil
+    }
+    var filteredNodes: [VaultNode] { (vault?.nodes ?? []).compactMap { $0.filtered(search, tags: tagFilter) } }
+    func clearFilters() { search = ""; tagFilter.removeAll() }
     var colorScheme: ColorScheme? { settings.appearance == "light" ? .light : settings.appearance == "dark" ? .dark : nil }
 
     func refresh() async {
@@ -75,7 +86,7 @@ struct EditorRoute: Identifiable {
         Task { _ = try? await core.request("touch") }
     }
     func clearSession() {
-        vault = nil; selection = nil; search = ""; revealed.removeAll(); activeSSH.removeAll()
+        vault = nil; selection = nil; clearFilters(); revealed.removeAll(); activeSSH.removeAll()
         editor = nil; showingKeys = false; sshPrompt = nil; deleteTarget = nil; notice = nil
         clearClipboard()
     }
@@ -120,9 +131,22 @@ struct EditorRoute: Identifiable {
             return true
         } catch { fail(error); return false }
     }
-    func addEntry() { guard vault != nil, !busy, editor == nil else { return }; search = ""; editor = EditorRoute(kind: .entry(nil), parentId: destination) }
-    func addGroup() { guard vault != nil, !busy, editor == nil else { return }; search = ""; editor = EditorRoute(kind: .group(nil), parentId: destination) }
-    func edit(_ node: VaultNode) { guard vault != nil, !busy, editor == nil else { return }; search = ""; editor = EditorRoute(kind: node.isGroup ? .group(node) : .entry(node), parentId: vault?.parent(of: node.id)) }
+    func addEntry() { guard vault != nil, !busy, editor == nil else { return }; clearFilters(); editor = EditorRoute(kind: .entry(nil), parentId: destination) }
+    func addGroup() { guard vault != nil, !busy, editor == nil else { return }; clearFilters(); editor = EditorRoute(kind: .group(nil), parentId: destination) }
+    func edit(_ node: VaultNode) {
+        guard let current = vault?.node(node.id), !busy, editor == nil else { return }
+        clearFilters(); editor = EditorRoute(kind: current.isGroup ? .group(current) : .entry(current), parentId: vault?.parent(of: current.id))
+    }
+    @discardableResult func setTags(_ tags: [TagColor], for node: VaultNode) async -> Bool {
+        guard vault?.node(node.id) != nil, editor == nil else { return false }
+        return await mutate("set_node_tags", ["node_id": node.id, "tags": TagColor.allCases.filter { tags.contains($0) }.map(\.rawValue)])
+    }
+    func toggleTag(_ tag: TagColor, for node: VaultNode) {
+        guard let current = vault?.node(node.id), !busy, editor == nil else { return }
+        var tags = Set(current.tags)
+        if tags.contains(tag) { tags.remove(tag) } else { tags.insert(tag) }
+        Task { await setTags(TagColor.allCases.filter { tags.contains($0) }, for: current) }
+    }
     func selectCreatedNode(parent: String?, index: Int?) {
         let children = parent.flatMap { vault?.node($0)?.children } ?? vault?.nodes ?? []
         if let index, children.indices.contains(index) { selection = children[index].id }

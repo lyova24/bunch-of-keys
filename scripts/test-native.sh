@@ -14,6 +14,11 @@ xcrun swiftc -swift-version 5 -warnings-as-errors -sdk "$SDKROOT" \
   macos/Sources/BunchOfKeys/SSHKeysEditor.swift macos/Tests/NativeStore.swift \
   macos/Sources/BunchOfKeys/WindowSurface.swift \
   macos/Tests/NativeOutline.swift macos/Tests/NativeWindowSurface.swift \
+  macos/Tests/NativeTagFilter.swift \
   macos/Tests/Integration.swift -o "$scratch/integration"
 BUNCH_OF_KEYS_DATA_DIR="$scratch/data" "$scratch/integration" \
-  "$PWD/target/macos/$arch/bunch-of-keys.app/Contents/MacOS/bunch-of-keys-core" "$scratch/test-key"
+  "$PWD/target/macos/$arch/bunch-of-keys.app/Contents/MacOS/bunch-of-keys-core" "$scratch/test-key" | tee "$scratch/native-output.log"
+if ! grep -q '^Native pipe integration passed:' "$scratch/native-output.log"; then
+  printf '%s\n' 'Native tests exited before completing integration.' >&2
+  exit 1
+fi

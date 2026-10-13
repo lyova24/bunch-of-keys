@@ -82,6 +82,20 @@ impl Node {
         }
     }
 
+    pub fn tags(&self) -> &[TagColor] {
+        match self {
+            Self::Group(group) => &group.tags,
+            Self::Entry(entry) => &entry.tags,
+        }
+    }
+
+    fn set_tags(&mut self, tags: Vec<TagColor>) {
+        match self {
+            Self::Group(group) => group.tags = tags,
+            Self::Entry(entry) => entry.tags = tags,
+        }
+    }
+
     fn set_name(&mut self, name: String) {
         match self {
             Self::Group(group) => group.name = name,
@@ -94,6 +108,8 @@ impl Node {
 pub struct Group {
     pub id: Uuid,
     pub name: String,
+    #[serde(default)]
+    pub tags: Vec<TagColor>,
     pub children: Vec<Node>,
 }
 
@@ -101,7 +117,21 @@ pub struct Group {
 pub struct Entry {
     pub id: Uuid,
     pub name: String,
+    #[serde(default)]
+    pub tags: Vec<TagColor>,
     pub fields: Vec<CredentialField>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum TagColor {
+    Red,
+    Orange,
+    Yellow,
+    Green,
+    Blue,
+    Purple,
+    Gray,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -165,6 +195,8 @@ pub enum ModelError {
     PositionOutOfBounds,
     #[error("field identifiers must be unique inside an entry")]
     DuplicateFieldId,
+    #[error("tag colors must be unique on a node")]
+    DuplicateTagColor,
     #[error("vault schema version is not supported")]
     UnsupportedSchema,
     #[error("SSH key name must not be empty")]
@@ -193,11 +225,22 @@ pub enum ModelError {
 
 impl VaultData {
     pub fn add_group(&mut self, parent_id: Option<Uuid>, name: &str) -> Result<Uuid, ModelError> {
+        self.add_group_with_tags(parent_id, name, Vec::new())
+    }
+
+    pub fn add_group_with_tags(
+        &mut self,
+        parent_id: Option<Uuid>,
+        name: &str,
+        tags: Vec<TagColor>,
+    ) -> Result<Uuid, ModelError> {
         let name = validated_name(name)?;
+        validate_tags(&tags)?;
         let id = Uuid::new_v4();
         let group = Node::Group(Group {
             id,
             name,
+            tags,
             children: Vec::new(),
         });
         children_mut(&mut self.nodes, parent_id)
@@ -212,10 +255,26 @@ impl VaultData {
         name: &str,
         fields: Vec<FieldInput>,
     ) -> Result<Uuid, ModelError> {
+        self.add_entry_with_tags(parent_id, name, fields, Vec::new())
+    }
+
+    pub fn add_entry_with_tags(
+        &mut self,
+        parent_id: Option<Uuid>,
+        name: &str,
+        fields: Vec<FieldInput>,
+        tags: Vec<TagColor>,
+    ) -> Result<Uuid, ModelError> {
         let name = validated_name(name)?;
         let fields = validated_fields(fields, &self.ssh_keys)?;
+        validate_tags(&tags)?;
         let id = Uuid::new_v4();
-        let entry = Node::Entry(Entry { id, name, fields });
+        let entry = Node::Entry(Entry {
+            id,
+            name,
+            tags,
+            fields,
+        });
         children_mut(&mut self.nodes, parent_id)
             .ok_or(ModelError::ParentNotFound)?
             .push(entry);
@@ -228,11 +287,27 @@ impl VaultData {
         name: &str,
         fields: Vec<FieldInput>,
     ) -> Result<(), ModelError> {
+        self.replace_entry_with_tags(entry_id, name, fields, None)
+    }
+
+    pub fn replace_entry_with_tags(
+        &mut self,
+        entry_id: Uuid,
+        name: &str,
+        fields: Vec<FieldInput>,
+        tags: Option<Vec<TagColor>>,
+    ) -> Result<(), ModelError> {
         let name = validated_name(name)?;
         let fields = validated_fields(fields, &self.ssh_keys)?;
+        if let Some(tags) = &tags {
+            validate_tags(tags)?;
+        }
         let entry = find_entry_mut(&mut self.nodes, entry_id).ok_or(ModelError::EntryNotFound)?;
         entry.name = name;
         entry.fields = fields;
+        if let Some(tags) = tags {
+            entry.tags = tags;
+        }
         Ok(())
     }
 
@@ -257,9 +332,31 @@ impl VaultData {
     }
 
     pub fn rename_node(&mut self, node_id: Uuid, name: &str) -> Result<(), ModelError> {
+        self.rename_node_with_tags(node_id, name, None)
+    }
+
+    pub fn rename_node_with_tags(
+        &mut self,
+        node_id: Uuid,
+        name: &str,
+        tags: Option<Vec<TagColor>>,
+    ) -> Result<(), ModelError> {
         let name = validated_name(name)?;
+        if let Some(tags) = &tags {
+            validate_tags(tags)?;
+        }
         let node = find_node_mut(&mut self.nodes, node_id).ok_or(ModelError::NodeNotFound)?;
         node.set_name(name);
+        if let Some(tags) = tags {
+            node.set_tags(tags);
+        }
+        Ok(())
+    }
+
+    pub fn set_node_tags(&mut self, node_id: Uuid, tags: Vec<TagColor>) -> Result<(), ModelError> {
+        validate_tags(&tags)?;
+        let node = find_node_mut(&mut self.nodes, node_id).ok_or(ModelError::NodeNotFound)?;
+        node.set_tags(tags);
         Ok(())
     }
 
@@ -444,6 +541,15 @@ fn validated_name(name: &str) -> Result<String, ModelError> {
         return Err(ModelError::NameTooLong);
     }
     Ok(name.to_owned())
+}
+
+fn validate_tags(tags: &[TagColor]) -> Result<(), ModelError> {
+    for (index, tag) in tags.iter().enumerate() {
+        if tags[..index].contains(tag) {
+            return Err(ModelError::DuplicateTagColor);
+        }
+    }
+    Ok(())
 }
 
 fn validated_fields(
@@ -704,6 +810,7 @@ fn remove_node(nodes: &mut Vec<Node>, node_id: Uuid) -> bool {
 fn validate_nodes(nodes: &[Node], ssh_keys: &[SshKey]) -> Result<(), ModelError> {
     for node in nodes {
         validated_name(node.name())?;
+        validate_tags(node.tags())?;
         match node {
             Node::Group(group) => validate_nodes(&group.children, ssh_keys)?,
             Node::Entry(entry) => {
@@ -849,6 +956,192 @@ mod tests {
             masked,
             ssh: None,
         }
+    }
+
+    #[test]
+    fn tags_follow_nodes_through_moves_edits_and_imports_without_changing_fields() {
+        let mut vault = VaultData::default();
+        let group_id = vault
+            .add_group_with_tags(None, "Work", vec![TagColor::Blue, TagColor::Green])
+            .unwrap();
+        let entry_id = vault
+            .add_entry_with_tags(
+                Some(group_id),
+                "Server",
+                vec![field("Password", "synthetic-secret", true)],
+                vec![TagColor::Red, TagColor::Purple],
+            )
+            .unwrap();
+        let original_field = find_entry(&vault.nodes, entry_id).unwrap().fields[0].clone();
+        vault.rename_node(group_id, "Renamed work").unwrap();
+        vault.move_node(entry_id, None, 0).unwrap();
+        vault
+            .replace_entry(
+                entry_id,
+                "Renamed server",
+                vec![FieldInput {
+                    id: Some(original_field.id),
+                    label: original_field.label.clone(),
+                    value: original_field.value.clone(),
+                    kind: original_field.kind,
+                    masked: original_field.masked,
+                    ssh: original_field.ssh.clone(),
+                }],
+            )
+            .unwrap();
+        vault.extend_root(crate::core::import_yaml("Imported:\n  login: demo").unwrap());
+
+        assert_eq!(
+            find_node(&vault.nodes, group_id).unwrap().tags(),
+            [TagColor::Blue, TagColor::Green]
+        );
+        assert_eq!(
+            find_node(&vault.nodes, entry_id).unwrap().tags(),
+            [TagColor::Red, TagColor::Purple]
+        );
+        assert_eq!(
+            vault.field(entry_id, original_field.id),
+            Some(&original_field)
+        );
+        assert_eq!(vault.nodes[2].tags(), []);
+        vault.validate().unwrap();
+    }
+
+    #[test]
+    fn tag_edits_and_clearing_are_independent_of_names_and_credentials() {
+        let mut vault = VaultData::default();
+        let group_id = vault.add_group(None, "Work").unwrap();
+        let entry_id = vault
+            .add_entry(
+                Some(group_id),
+                "Server",
+                vec![field("Token", "secret", true)],
+            )
+            .unwrap();
+        let original_field = find_entry(&vault.nodes, entry_id).unwrap().fields[0].clone();
+        vault
+            .set_node_tags(group_id, vec![TagColor::Yellow, TagColor::Gray])
+            .unwrap();
+        vault
+            .set_node_tags(entry_id, vec![TagColor::Orange, TagColor::Green])
+            .unwrap();
+        assert_eq!(
+            vault.field(entry_id, original_field.id),
+            Some(&original_field)
+        );
+        assert_eq!(find_node(&vault.nodes, entry_id).unwrap().name(), "Server");
+        vault
+            .rename_node_with_tags(group_id, "Renamed", Some(vec![TagColor::Red]))
+            .unwrap();
+        vault
+            .replace_entry_with_tags(entry_id, "Updated", Vec::new(), Some(Vec::new()))
+            .unwrap();
+        assert_eq!(
+            find_node(&vault.nodes, group_id).unwrap().tags(),
+            [TagColor::Red]
+        );
+        assert_eq!(find_node(&vault.nodes, entry_id).unwrap().tags(), []);
+        vault.set_node_tags(group_id, Vec::new()).unwrap();
+        assert_eq!(find_node(&vault.nodes, group_id).unwrap().tags(), []);
+    }
+
+    #[test]
+    fn duplicate_or_missing_node_tag_mutations_leave_the_vault_unchanged() {
+        let mut vault = VaultData::default();
+        let group_id = vault
+            .add_group_with_tags(None, "Work", vec![TagColor::Blue])
+            .unwrap();
+        let entry_id = vault
+            .add_entry(
+                Some(group_id),
+                "Server",
+                vec![field("Token", "secret", true)],
+            )
+            .unwrap();
+        let original = vault.clone();
+        let duplicate = vec![TagColor::Red, TagColor::Red];
+        assert_eq!(
+            vault.add_group_with_tags(None, "Invalid", duplicate.clone()),
+            Err(ModelError::DuplicateTagColor)
+        );
+        assert_eq!(
+            vault.add_entry_with_tags(None, "Invalid", Vec::new(), duplicate.clone()),
+            Err(ModelError::DuplicateTagColor)
+        );
+        assert_eq!(
+            vault.rename_node_with_tags(group_id, "Invalid", Some(duplicate.clone())),
+            Err(ModelError::DuplicateTagColor)
+        );
+        assert_eq!(
+            vault.replace_entry_with_tags(entry_id, "Invalid", Vec::new(), Some(duplicate.clone())),
+            Err(ModelError::DuplicateTagColor)
+        );
+        assert_eq!(
+            vault.set_node_tags(entry_id, duplicate),
+            Err(ModelError::DuplicateTagColor)
+        );
+        assert_eq!(
+            vault.set_node_tags(Uuid::new_v4(), vec![TagColor::Blue]),
+            Err(ModelError::NodeNotFound)
+        );
+        assert_eq!(vault, original);
+        find_node_mut(&mut vault.nodes, entry_id)
+            .unwrap()
+            .set_tags(vec![TagColor::Gray, TagColor::Gray]);
+        assert_eq!(vault.validate(), Err(ModelError::DuplicateTagColor));
+    }
+
+    #[test]
+    fn legacy_nodes_default_to_empty_tags_and_unknown_colors_are_rejected() {
+        let mut vault: VaultData = serde_json::from_value(serde_json::json!({
+            "schema_version": 2,
+            "nodes": [{
+                "type": "group",
+                "id": Uuid::new_v4(),
+                "name": "Legacy group",
+                "children": [{
+                    "type": "entry",
+                    "id": Uuid::new_v4(),
+                    "name": "Legacy entry",
+                    "fields": []
+                }]
+            }]
+        }))
+        .unwrap();
+        vault.migrate().unwrap();
+        let Node::Group(group) = &vault.nodes[0] else {
+            panic!("expected a group");
+        };
+        assert_eq!(group.tags, [] as [TagColor; 0]);
+        assert_eq!(group.children[0].tags(), []);
+        assert_eq!(vault.schema_version, 2);
+        assert!(serde_json::from_value::<TagColor>(serde_json::json!("pink")).is_err());
+    }
+
+    #[test]
+    fn tag_views_include_colors_while_preserving_credential_redaction() {
+        let mut vault = VaultData::default();
+        let group_id = vault
+            .add_group_with_tags(None, "Work", vec![TagColor::Yellow])
+            .unwrap();
+        vault
+            .add_entry_with_tags(
+                Some(group_id),
+                "Server",
+                vec![field("Password", "synthetic-secret", true)],
+                vec![TagColor::Red, TagColor::Gray],
+            )
+            .unwrap();
+        let view = serde_json::to_value(crate::view::VaultView::from_data(Uuid::new_v4(), &vault))
+            .unwrap();
+
+        assert_eq!(view["nodes"][0]["tags"], serde_json::json!(["yellow"]));
+        assert_eq!(
+            view["nodes"][0]["children"][0]["tags"],
+            serde_json::json!(["red", "gray"])
+        );
+        assert!(view["nodes"][0]["children"][0]["fields"][0]["value"].is_null());
+        assert!(!view.to_string().contains("synthetic-secret"));
     }
 
     fn ssh_field(label: &str, key_id: Uuid) -> FieldInput {

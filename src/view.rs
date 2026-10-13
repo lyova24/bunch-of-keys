@@ -1,7 +1,7 @@
 use serde::Serialize;
 use uuid::Uuid;
 
-use crate::core::{CredentialField, Entry, FieldKind, Group, Node, SshKey, VaultData};
+use crate::core::{CredentialField, Entry, FieldKind, Group, Node, SshKey, TagColor, VaultData};
 
 #[derive(Debug, Serialize)]
 pub struct VaultView {
@@ -30,6 +30,7 @@ pub enum NodeView {
 pub struct GroupView {
     pub id: Uuid,
     pub name: String,
+    pub tags: Vec<TagColor>,
     pub children: Vec<NodeView>,
 }
 
@@ -37,6 +38,7 @@ pub struct GroupView {
 pub struct EntryView {
     pub id: Uuid,
     pub name: String,
+    pub tags: Vec<TagColor>,
     pub fields: Vec<FieldView>,
 }
 
@@ -86,6 +88,7 @@ impl GroupView {
         Self {
             id: group.id,
             name: group.name.clone(),
+            tags: group.tags.clone(),
             children: group
                 .children
                 .iter()
@@ -100,6 +103,7 @@ impl EntryView {
         Self {
             id: entry.id,
             name: entry.name.clone(),
+            tags: entry.tags.clone(),
             fields: entry
                 .fields
                 .iter()

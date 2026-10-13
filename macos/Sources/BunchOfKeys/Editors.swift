@@ -21,6 +21,35 @@ struct EditorError: View {
         if let error = store.error { Text(error).foregroundStyle(.red).font(.callout).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }
     }
 }
+struct TagPicker: View {
+    @Binding var selection: Set<TagColor>
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack {
+                Text("Tags").font(.callout.weight(.medium))
+                Spacer()
+                if !selection.isEmpty { Button("Clear") { selection.removeAll() }.buttonStyle(.borderless).font(.caption) }
+            }
+            HStack(spacing: 8) {
+                ForEach(TagColor.allCases) { tag in
+                    Button {
+                        if selection.contains(tag) { selection.remove(tag) } else { selection.insert(tag) }
+                    } label: {
+                        ZStack {
+                            Circle().fill(tag.color).overlay { Circle().strokeBorder(.primary.opacity(0.18), lineWidth: 1) }
+                            if selection.contains(tag) { Image(systemName: "checkmark").font(.system(size: 12, weight: .bold)).foregroundStyle(tag == .yellow ? .black : .white) }
+                        }.frame(width: 26, height: 26).padding(3).contentShape(Rectangle())
+                    }.buttonStyle(.plain).help(tag.title)
+                        .accessibilityLabel("\(tag.title) tag")
+                        .accessibilityValue(selection.contains(tag) ? "Selected" : "Not selected")
+                }
+                Spacer(minLength: 0)
+            }
+            Text(selection.isEmpty ? "No tags" : TagColor.allCases.filter { selection.contains($0) }.map(\.title).joined(separator: ", "))
+                .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+        }
+    }
+}
 struct EntryEditor: View {
     @EnvironmentObject var store: AppStore
     var node: VaultNode?
@@ -34,7 +63,9 @@ struct EntryEditor: View {
     @State private var dirty = false
     @State private var initialName = ""
     @State private var initialFields: [FieldDraft] = []
-    var hasChanges: Bool { name != initialName || fields != initialFields }
+    @State private var tags = Set<TagColor>()
+    @State private var initialTags = Set<TagColor>()
+    var hasChanges: Bool { name != initialName || fields != initialFields || tags != initialTags }
     @State private var confirmDiscard = false
     var valid: Bool {
         !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && fields.allSatisfy {
@@ -50,6 +81,7 @@ struct EntryEditor: View {
             }
             if node == nil { Text("In \(parentId.flatMap { store.vault?.node($0)?.name } ?? store.vaultName)").font(.caption).foregroundStyle(.secondary) }
             TextField("Entry name", text: $name).textFieldStyle(.roundedBorder).onChange(of: name) { _, _ in if loaded { dirty = true } }
+            TagPicker(selection: $tags)
             if !loaded { ProgressView("Loading fields…").frame(maxHeight: .infinity) }
             else {
                 ScrollView {
@@ -85,7 +117,7 @@ struct EntryEditor: View {
                 Button("Save") {
                     Task {
                         let command = node == nil ? "add_entry" : "update_entry"
-                        var args: [String: Any] = ["name": name, "fields": fields.map(\.payload)]
+                        var args: [String: Any] = ["name": name, "fields": fields.map(\.payload), "tags": TagColor.allCases.filter { tags.contains($0) }.map(\.rawValue)]
                         if let node { args["entry_id"] = node.id } else { args["parent_id"] = parentId as Any? ?? NSNull(); if let insertionIndex { args["index"] = insertionIndex } }
                         if await store.mutate(command, args) {
                             if let node { store.selection = node.id }
@@ -99,7 +131,7 @@ struct EntryEditor: View {
             .disabled(store.busy)
             .task {
                 guard !loaded else { return }
-                store.error = nil; name = node?.name ?? ""
+                store.error = nil; name = node?.name ?? ""; tags = Set(node?.tags ?? []); initialTags = tags
                 var drafts = (node?.fields ?? []).map(FieldDraft.init)
                 do {
                     if let node {
@@ -188,17 +220,24 @@ struct GroupEditor: View {
     var routeId: String
     @State private var name = ""
     @State private var loaded = false
+    @State private var tags = Set<TagColor>()
+    @State private var initialName = ""
+    @State private var initialTags = Set<TagColor>()
+    @State private var confirmDiscard = false
+    var hasChanges: Bool { name != initialName || tags != initialTags }
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            HStack { Text(node == nil ? "New Group" : "Rename Group").font(.title2.weight(.semibold)); Spacer(); if node == nil { DraftHandle(id: routeId) } }
+            HStack { Text(node == nil ? "New Group" : "Edit Group").font(.title2.weight(.semibold)); Spacer(); if node == nil { DraftHandle(id: routeId) } }
             if node == nil { Text("In \(parentId.flatMap { store.vault?.node($0)?.name } ?? store.vaultName)").font(.caption).foregroundStyle(.secondary) }
             TextField("Group name", text: $name).textFieldStyle(.roundedBorder)
+            TagPicker(selection: $tags)
             EditorError()
             HStack {
-                Button("Cancel") { close() }.keyboardShortcut(.cancelAction); Spacer()
+                Button("Cancel") { if hasChanges { confirmDiscard = true } else { close() } }.keyboardShortcut(.cancelAction); Spacer()
                 Button("Save") {
                     Task {
                         var args: [String: Any] = node.map { ["node_id": $0.id, "name": name] } ?? ["parent_id": parentId as Any? ?? NSNull(), "name": name]
+                        args["tags"] = TagColor.allCases.filter { tags.contains($0) }.map(\.rawValue)
                         if node == nil, let insertionIndex { args["index"] = insertionIndex }
                         if await store.mutate(node == nil ? "add_group" : "rename_node", args) {
                             if let node { store.selection = node.id }
@@ -208,7 +247,11 @@ struct GroupEditor: View {
                     }
                 }.buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction).disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || store.busy)
             }
-        }.padding(14).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).onAppear { if !loaded { name = node?.name ?? ""; store.error = nil; loaded = true } }
+        }.padding(14).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).disabled(store.busy)
+            .onAppear { if !loaded { name = node?.name ?? ""; initialName = name; tags = Set(node?.tags ?? []); initialTags = tags; store.error = nil; loaded = true } }
+            .confirmationDialog("Discard changes?", isPresented: $confirmDiscard, titleVisibility: .visible) {
+                Button("Discard", role: .destructive) { close() }
+            }
     }
     func close() { store.editor = nil; store.error = nil }
 

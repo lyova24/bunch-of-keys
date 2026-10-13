@@ -5,8 +5,8 @@
   <key>CFBundleDisplayName</key><string>bunch-of-keys</string>
   <key>CFBundleIdentifier</key><string>dev.bunchofkeys.desktop</string>
   <key>CFBundleExecutable</key><string>bunch-of-keys</string>
-  <key>CFBundleShortVersionString</key><string>2.0.0</string>
-  <key>CFBundleVersion</key><string>2.0.0</string>
+  <key>CFBundleShortVersionString</key><string>2.0.1</string>
+  <key>CFBundleVersion</key><string>2.0.1</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>

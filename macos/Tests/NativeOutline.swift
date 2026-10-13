@@ -23,7 +23,76 @@ import SwiftUI
     func enumerateDraggingItems(options: NSDraggingItemEnumerationOptions, for view: NSView?, classes: [AnyClass], searchOptions: [NSPasteboard.ReadingOptionKey: Any], using block: (NSDraggingItem, Int, UnsafeMutablePointer<ObjCBool>) -> Void) {}
 }
 @MainActor enum NativeOutline {
+    static func verifyTrailingGeometry() async throws {
+        _ = NSApplication.shared
+        let board = NSPasteboard(name: .init("dev.bunchofkeys.geometry-test.\(UUID().uuidString)"))
+        defer { board.releaseGlobally() }
+        let field = VaultField(id: "geometry-field", label: "Username", kind: "text", masked: false, value: "synthetic", ssh: nil)
+        let leaf = VaultNode(id: "geometry-leaf", name: "A long nested entry title that must leave room for its colored tag", type: "entry", fields: [field], tags: [.blue])
+        var nested = leaf
+        for depth in (0..<4).reversed() {
+            let entry = VaultNode(id: "geometry-entry-\(depth)", name: "Another long credential title at depth \(depth)", type: "entry", fields: [], tags: [.purple])
+            nested = VaultNode(id: "geometry-group-\(depth)", name: "A long tagged folder title at depth \(depth)", type: "group", children: [entry, nested], tags: TagColor.allCases)
+        }
+        let rootEntry = VaultNode(id: "geometry-root-entry", name: "Root credential", type: "entry", fields: [], tags: [.green])
+        let filler = (0..<24).map { VaultNode(id: "geometry-filler-\($0)", name: "Additional credential \($0)", type: "entry", fields: []) }
+        for style in [NSScroller.Style.overlay, .legacy] {
+            for hasScroller in [false, true] {
+                let store = AppStore(core: CoreClient(executable: URL(fileURLWithPath: "/usr/bin/false")), pasteboard: board)
+                store.vault = Vault(id: "geometry-vault", sshKeys: [], nodes: [nested, rootEntry] + filler)
+                let coordinator = VaultOutline.Coordinator(store); coordinator.didFocus = true
+                let scroll = VaultOutline.makeScrollView(coordinator: coordinator)
+                scroll.scrollerStyle = style; scroll.hasVerticalScroller = hasScroller; scroll.autohidesScrollers = false
+                let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 480, height: 480), styleMask: [.titled, .resizable], backing: .buffered, defer: false)
+                window.isReleasedWhenClosed = false; window.contentView = scroll
+                defer { window.close() }
+                let outline = coordinator.outline!
+                coordinator.update(store.filteredNodes); outline.expandItem(nil, expandChildren: true)
+                for width in [480, 960, 480] {
+                    window.setContentSize(NSSize(width: width, height: 480))
+                    for _ in 0..<3 {
+                        window.contentView?.layoutSubtreeIfNeeded(); outline.layoutSubtreeIfNeeded()
+                        try await Task.sleep(for: .milliseconds(20))
+                    }
+                    var trailingEdges: [CGFloat] = []
+                    for row in 0..<outline.numberOfRows {
+                        guard let item = outline.item(atRow: row) as? OutlineNode, item.node?.tags.isEmpty == false else { continue }
+                        let cell = outline.view(atColumn: 0, row: row, makeIfNecessary: true) as! NodeOutlineCell
+                        cell.layoutSubtreeIfNeeded()
+                        let dots = cell.subviews.compactMap { $0 as? TagDotsView }.first!
+                        let right = dots.convert(dots.bounds, to: scroll.contentView).maxX
+                        let margin = scroll.contentView.bounds.maxX - right
+                        precondition(abs(margin - 16) < 0.75, "Tagged rows must keep a 16-point viewport margin, including native inset, indentation, scrollers and resizing (got \(margin))")
+                        // NSTextField's frame extends two points past its alignment
+                        // rect, so the ten-point constraint leaves an eight-point gap.
+                        precondition(cell.textField!.frame.maxX <= dots.frame.minX - 7, "Long titles must truncate before their tag markers")
+                        trailingEdges.append(right)
+                    }
+                    precondition(trailingEdges.count == 10, "Geometry coverage must include root and deeply nested tagged groups and entries")
+                    precondition(trailingEdges.max()! - trailingEdges.min()! < 0.75, "Tag trailing edges must align at every hierarchy depth")
+                    let fieldItem = coordinator.boxes["field:\(leaf.id):\(field.id)"]!
+                    let fieldRow = outline.row(forItem: fieldItem)
+                    let fieldCell = outline.view(atColumn: 0, row: fieldRow, makeIfNecessary: true) as! HostedOutlineCell
+                    fieldCell.layoutSubtreeIfNeeded()
+                    let fieldRight = fieldCell.host.convert(fieldCell.host.bounds, to: scroll.contentView).maxX
+                    let fieldMargin = scroll.contentView.bounds.maxX - fieldRight
+                    precondition(fieldMargin >= 11.25 && fieldMargin <= 16.75, "Hosted fields must preserve 12–16 points of native outer spacing before their inner action padding (got \(fieldMargin), cell \(fieldCell.frame), host \(fieldCell.host.frame))")
+                }
+                store.editor = EditorRoute(kind: .entry(leaf))
+                coordinator.update(store.filteredNodes)
+                window.contentView?.layoutSubtreeIfNeeded(); outline.layoutSubtreeIfNeeded()
+                let editorItem = coordinator.boxes["editor:\(store.editor!.id)"]!
+                let editorCell = outline.view(atColumn: 0, row: outline.row(forItem: editorItem), makeIfNecessary: true) as! HostedOutlineCell
+                editorCell.layoutSubtreeIfNeeded()
+                let editorRight = editorCell.host.convert(editorCell.host.bounds, to: scroll.contentView).maxX
+                let editorMargin = scroll.contentView.bounds.maxX - editorRight
+                precondition(editorMargin >= 11.25 && editorMargin <= 16.75, "Nested editor content must preserve native outer spacing inside the viewport (got \(editorMargin))")
+            }
+        }
+        print("Native outline geometry passed: aligned 16-point tag margins, nested hosted content, 480/960-point resize and overlay/legacy scrollers.")
+    }
     static func run(executable: URL) async throws {
+        try await verifyTrailingGeometry()
         let board = NSPasteboard(name: .init("dev.bunchofkeys.outline-test.\(UUID().uuidString)"))
         defer { board.releaseGlobally() }
         let store = AppStore(core: CoreClient(executable: executable), pasteboard: board)
@@ -43,6 +112,9 @@ import SwiftUI
         precondition(entrySaved)
         let entry = store.vault!.node(work)!.children!.first!
         let secret = entry.fields!.first!.id
+        let taggedWork = await store.setTags([.red], for: store.vault!.node(work)!)
+        let taggedEntry = await store.setTags([.blue, .purple], for: entry)
+        precondition(taggedWork && taggedEntry)
         let coordinator = VaultOutline.Coordinator(store)
         let outline = VaultOutlineView(frame: NSRect(x: 0, y: 0, width: 560, height: 500))
         let column = NSTableColumn(identifier: .init("test"))
@@ -60,6 +132,41 @@ import SwiftUI
             }
             preconditionFailure("Native drop did not persist: \(store.error ?? "no response")")
         }
+        for (id, tags) in [(work, [TagColor.red]), (entry.id, [TagColor.blue, .purple])] {
+            let item = coordinator.boxes[id]!
+            let cell = coordinator.outlineView(outline, viewFor: column, item: item) as! NSTableCellView
+            let dots = cell.subviews.compactMap { $0 as? TagDotsView }.first!
+            precondition(dots.tags == tags)
+            precondition(tags.allSatisfy { cell.accessibilityLabel()?.contains($0.title) == true }, "Rows must expose tag color names to VoiceOver")
+        }
+        let menu = NSMenu()
+        coordinator.populateMenu(menu, for: coordinator.boxes[entry.id])
+        let tagsMenu = menu.item(withTitle: "Tags")!.submenu!
+        precondition(tagsMenu.items.filter { $0.state == .on }.map(\.title) == ["Blue", "Purple"])
+        precondition(tagsMenu.items.filter { $0.representedObject != nil }.count == TagColor.allCases.count)
+        precondition(tagsMenu.item(withTitle: "Remove All Tags")!.isEnabled)
+        store.busy = true
+        coordinator.populateMenu(menu, for: coordinator.boxes[entry.id])
+        precondition(!menu.item(withTitle: "Tags")!.isEnabled)
+        precondition(menu.item(withTitle: "Tags")!.submenu!.items.filter { !$0.isSeparatorItem }.allSatisfy { !$0.isEnabled })
+        store.busy = false
+        coordinator.populateMenu(menu, for: coordinator.boxes[entry.id])
+        coordinator.toggleTag(menu.item(withTitle: "Tags")!.submenu!.item(withTitle: "Green")!)
+        try await waitFor { store.vault?.node(entry.id)?.tags.contains(.green) == true }
+        coordinator.update(store.filteredNodes)
+        precondition(store.vault?.node(entry.id)?.tags == [.green, .blue, .purple])
+        store.tagFilter = [.blue]
+        coordinator.update(store.filteredNodes)
+        precondition(coordinator.roots.map(\.id) == [work], "A tagged child must retain its parent context")
+        precondition(outline.isItemExpanded(coordinator.boxes[work]!))
+        precondition(coordinator.outlineView(outline, pasteboardWriterForItem: coordinator.boxes[entry.id]!) == nil)
+        payload("dev.bunchofkeys.node", entry.id)
+        precondition(coordinator.outlineView(outline, validateDrop: info, proposedItem: nil, proposedChildIndex: 0).isEmpty)
+        precondition(!coordinator.outlineView(outline, acceptDrop: info, item: nil, childIndex: 0), "Filtered tree positions must never be used for moves")
+        store.search = "No matching item"
+        coordinator.update(store.filteredNodes)
+        precondition(coordinator.roots.isEmpty)
+        store.clearFilters(); coordinator.update(store.filteredNodes)
         payload("dev.bunchofkeys.saved-field", "\(entry.id):\(secret)")
         precondition(coordinator.outlineView(outline, validateDrop: info, proposedItem: coordinator.boxes[entry.id], proposedChildIndex: 2) == .move)
         precondition(coordinator.outlineView(outline, acceptDrop: info, item: coordinator.boxes[entry.id], childIndex: 2))
@@ -79,6 +186,8 @@ import SwiftUI
         store.selection = work; store.addEntry()
         let route = store.editor!
         coordinator.update(store.filteredNodes)
+        coordinator.populateMenu(menu, for: coordinator.boxes[entry.id])
+        precondition(!menu.item(withTitle: "Tags")!.isEnabled, "An editor must disable context tag mutation")
         let host = coordinator.editorHost
         let nodeCount = store.vault!.nodes
         payload("dev.bunchofkeys.draft", route.id.uuidString)
@@ -98,6 +207,6 @@ import SwiftUI
         precondition(coordinator.boxes[other]?.children.first?.id == draft.id)
         precondition(store.vault!.nodes == nodeCount, "Moving an unsaved draft must not persist it")
         await store.shutdown()
-        print("Native outline passed: field ordering, node moves, cycle protection, search guard and unsaved draft identity.")
+        print("Native outline passed: tag dots and accessibility, context tag menus, filtered move guards, field ordering, node moves, cycle protection and unsaved draft identity.")
     }
 }

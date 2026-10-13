@@ -1,6 +1,6 @@
 # SSH private keys
 
-Status: implemented and current in version 2.0.0.
+Status: implemented and current in version 2.0.1.
 
 ## Recommendation
 

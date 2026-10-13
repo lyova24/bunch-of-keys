@@ -1,6 +1,6 @@
 [package]
 name = "bunch-of-keys"
-version = "2.0.0"
+version = "2.0.1"
 description = "A native macOS encrypted credential manager"
 authors = ["bunch-of-keys contributors"]
 edition = "2024"

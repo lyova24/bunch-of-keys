@@ -1,7 +1,7 @@
 # bunch-of-keys
 
 A native macOS application for local, encrypted credential collections.
-Current version: **2.0.0**. Requires **macOS 14 Sonoma or later**.
+Current version: **2.0.1**. Requires **macOS 14 Sonoma or later**.
 
 The interface uses SwiftUI and AppKit: a standard Mac window, a compact tree with
 keyboard navigation and drag-and-drop, native menus, file panels, and Settings.
@@ -17,6 +17,8 @@ Linux and Windows are no longer supported.
 - Multiple independent vaults with separate master passwords.
 - Recursive groups and entries; direct tree and field drag-and-drop; search
   through names, labels, and visible values without searching masked secrets.
+- macOS-style colored tags on groups and entries, with multiple tags per item
+  and color filters that combine with search while retaining the tree context.
 - Editable Text, Secret, URL, and structured SSH fields, stable field IDs,
   explicit masking and reveal, click-to-copy, and HTTP(S) browser actions.
 - Reusable named OpenSSH keys stored inside encrypted vaults, guarded deletion,
