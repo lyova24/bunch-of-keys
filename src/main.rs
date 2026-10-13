@@ -1,6 +1,6 @@
 //! Private, pipe-only service embedded in the native macOS application.
 #[cfg(not(target_os = "macos"))]
-compile_error!("bunch-of-keys 2 supports macOS only");
+compile_error!("Keepy 2 supports macOS only");
 mod app;
 mod core;
 mod protocol;
@@ -24,7 +24,7 @@ fn main() {
         Ok((Arc::new(AppState::new(storage, config)), lock))
     });
     let Ok((state, _instance_lock)) = result else {
-        eprintln!("Cannot initialize bunch-of-keys storage.");
+        eprintln!("Cannot initialize Keepy storage.");
         std::process::exit(1);
     };
     state.spawn_idle_monitor();

@@ -85,7 +85,7 @@ pub struct AppStorage {
 
 #[derive(Debug, Error)]
 pub enum StorageError {
-    #[error("another bunch-of-keys service is already using this data directory")]
+    #[error("another Keepy service is already using this data directory")]
     AlreadyRunning,
     #[error("the platform does not provide a user data directory")]
     NoHomeDirectory,

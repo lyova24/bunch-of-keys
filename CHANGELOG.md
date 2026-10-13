@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.1.0 - 2026-10-14
+
+- Renamed the application to Keepy with a thin green/blue wordmark and a
+  matching vector bunch of keys on a shared ring, reused in the application icon, menu bar, authentication
+  and empty workspace. Generate all icon sizes from the same native path (#9).
+- Preserve existing vaults, encryption, storage locations and application
+  identity during the rename. Native bundles and DMGs now use the Keepy name.
+
 ## 2.0.1 - 2026-10-13
 
 - Added macOS-style colored tags for groups and entries, with visible tag

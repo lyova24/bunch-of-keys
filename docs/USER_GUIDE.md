@@ -1,6 +1,6 @@
 # User guide
 
-bunch-of-keys 2.0.1 requires macOS 14+. All credential data stays on your Mac.
+Keepy 2.1.0 requires macOS 14+. All credential data stays on your Mac.
 
 ## Vaults and navigation
 

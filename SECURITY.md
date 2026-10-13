@@ -2,7 +2,7 @@
 
 ## What the application protects
 
-`bunch-of-keys` is designed to protect vault contents when vault files or
+Keepy is designed to protect vault contents when vault files or
 backups are copied from a powered-off or locked machine. Authenticated
 encryption also detects accidental corruption and deliberate modification.
 

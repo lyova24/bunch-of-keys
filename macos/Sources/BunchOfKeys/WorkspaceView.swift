@@ -22,7 +22,7 @@ struct WorkspaceView: View {
                 ProgressView("Opening vault service…").frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if !store.serviceAvailable {
                 ContentUnavailableView {
-                    Label("Reopen bunch-of-keys", systemImage: "arrow.clockwise")
+                    Label("Reopen Keepy", systemImage: "arrow.clockwise")
                 } description: { Text("Quit and reopen the application. If another copy is running, close it first.") }
                 actions: { Button("Quit") { NSApp.terminate(nil) } }
             } else if store.vault == nil {
@@ -70,7 +70,8 @@ struct WorkspaceView: View {
                     VaultOutline(store: store).id(store.vault?.id)
                     if store.filteredNodes.isEmpty && store.editor?.isInline != true {
                         VStack(spacing: 10) {
-                            Image(systemName: store.isFiltering ? "magnifyingglass" : "key.horizontal").font(.largeTitle).foregroundStyle(.secondary)
+                            if store.isFiltering { Image(systemName: "magnifyingglass").font(.largeTitle).foregroundStyle(.secondary) }
+                            else { AppLogoView().frame(width: 36, height: 36).foregroundStyle(.secondary) }
                             Text(store.isFiltering ? "No matching items" : "Add an entry or group using +").foregroundStyle(.secondary)
                             if store.isFiltering {
                                 Text("Try another search or tag color.").font(.caption).foregroundStyle(.secondary)
@@ -94,7 +95,7 @@ struct WorkspaceView: View {
         .onChange(of: store.editor?.id) { _, id in if id != nil { showingTagFilters = false } }
         .onChange(of: store.vault?.id) { _, _ in showingTagFilters = false }
         .onChange(of: store.canFilterTags) { _, allowed in if !allowed { showingTagFilters = false } }
-        .navigationTitle(store.vault == nil ? "bunch-of-keys" : store.vaultName)
+        .navigationTitle(store.vault == nil ? AppLogo.name : store.vaultName)
         .toolbar {
             ToolbarItem(placement: .navigation) {
                 Menu { vaultMenu } label: { Label("Vaults", systemImage: "externaldrive") }
@@ -123,7 +124,7 @@ struct WorkspaceView: View {
         .sheet(item: Binding(get: { store.editor?.isInline == false ? store.editor : nil }, set: { if $0 == nil && store.editor?.isInline == false { store.editor = nil } })) { route in EditorView(route: route).environmentObject(store).preferredColorScheme(store.colorScheme) }
         .sheet(isPresented: $store.showingKeys) { SSHKeysEditor().environmentObject(store).preferredColorScheme(store.colorScheme) }
         .sheet(isPresented: Binding(get: { store.sshPrompt != nil }, set: { if !$0 { store.sshPrompt = nil } })) { SSHPassphraseView().environmentObject(store) }
-        .alert("bunch-of-keys", isPresented: Binding(get: { store.error != nil && store.editor == nil && store.sshPrompt == nil && !store.showingKeys }, set: { if !$0 { store.error = nil } })) {
+        .alert(AppLogo.name, isPresented: Binding(get: { store.error != nil && store.editor == nil && store.sshPrompt == nil && !store.showingKeys }, set: { if !$0 { store.error = nil } })) {
             Button("OK") { store.error = nil }
         } message: { Text(store.error ?? "") }
         .confirmationDialog("Delete \(store.deleteTarget?.name ?? "item")?", isPresented: Binding(get: { store.deleteTarget != nil }, set: { if !$0 { store.deleteTarget = nil } }), titleVisibility: .visible) {
@@ -310,7 +311,10 @@ struct AuthenticationView: View {
     @FocusState private var passwordFocused: Bool
     var body: some View {
         VStack(spacing: 20) {
-            Image(systemName: "lock.shield").font(.system(size: 42, weight: .light)).foregroundStyle(.tint)
+            HStack(spacing: 12) {
+                AppLogoView(colored: true).frame(width: 36, height: 40)
+                AppWordmarkView().frame(width: 140, height: 46)
+            }.accessibilityElement(children: .ignore).accessibilityLabel(AppLogo.name)
             Text(creating ? "Create your first vault" : "Unlock your vault").font(.title2.weight(.semibold))
             VStack(spacing: 12) {
                 if creating { TextField("Vault name", text: $name).textFieldStyle(.roundedBorder) }

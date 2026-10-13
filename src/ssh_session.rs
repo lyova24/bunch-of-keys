@@ -481,7 +481,7 @@ pub fn run_terminal_helper_if_requested() -> Option<i32> {
     let completion = HelperCompletion(request.socket_path.clone());
     let ssh = Path::new("/usr/bin/ssh");
     if !executable(ssh) {
-        eprintln!("bunch-of-keys: the system ssh executable was not found.");
+        eprintln!("Keepy: the system ssh executable was not found.");
         pause_after_failure();
         return Some(127);
     }
@@ -503,7 +503,7 @@ pub fn run_terminal_helper_if_requested() -> Option<i32> {
             Some(status.code().unwrap_or(1))
         }
         Err(error) => {
-            eprintln!("bunch-of-keys: could not start ssh: {error}");
+            eprintln!("Keepy: could not start ssh: {error}");
             pause_after_failure();
             Some(127)
         }

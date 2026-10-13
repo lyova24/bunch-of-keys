@@ -38,7 +38,7 @@ jobs:
         run: bash scripts/build-macos.sh --dmg
       - uses: actions/upload-artifact@v4
         with:
-          name: bunch-of-keys-macos-${{ matrix.arch }}
+          name: Keepy-macos-${{ matrix.arch }}
           path: dist/*
           if-no-files-found: error
           retention-days: 14

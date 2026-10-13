@@ -1,7 +1,7 @@
 [package]
 name = "bunch-of-keys"
-version = "2.0.1"
-description = "A native macOS encrypted credential manager"
+version = "2.1.0"
+description = "Keepy, a native macOS encrypted credential manager"
 authors = ["bunch-of-keys contributors"]
 edition = "2024"
 license = "MIT"

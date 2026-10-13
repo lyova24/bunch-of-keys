@@ -1,7 +1,10 @@
-# bunch-of-keys
+# Keepy
+
+<img src="icons/wordmark.svg" alt="Keepy" width="280">
 
 A native macOS application for local, encrypted credential collections.
-Current version: **2.0.1**. Requires **macOS 14 Sonoma or later**.
+Formerly bunch-of-keys; existing vaults open in place.
+Current version: **2.1.0**. Requires **macOS 14 Sonoma or later**.
 
 The interface uses SwiftUI and AppKit: a standard Mac window, a compact tree with
 keyboard navigation and drag-and-drop, native menus, file panels, and Settings.
@@ -41,7 +44,7 @@ macOS SDK), then run:
 
 ```sh
 bash scripts/build-macos.sh
-open target/macos/$(uname -m)/bunch-of-keys.app
+open target/macos/$(uname -m)/Keepy.app
 ```
 
 The Swift source also has a Swift Package manifest for opening in Xcode. The

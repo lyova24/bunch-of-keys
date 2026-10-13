@@ -41,7 +41,7 @@ final class CoreClient: @unchecked Sendable {
                     while !buffer.contains(10) {
                         let data = output.fileHandleForReading.availableData
                         guard !data.isEmpty else {
-                            throw CoreError(message: "The vault service disconnected. Close any other copy of bunch-of-keys, then reopen the application.")
+                            throw CoreError(message: "The vault service disconnected. Close any other copy of Keepy, then reopen the application.")
                         }
                         buffer.append(data)
                         guard buffer.count <= 72 * 1024 * 1024 else { throw CoreError(message: "Vault response is too large.") }

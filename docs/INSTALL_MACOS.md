@@ -1,6 +1,6 @@
 # Installing on macOS
 
-Version 2.0.1 supports macOS 14 Sonoma or later. Liquid Glass requires macOS 26.
+Version 2.1.0 supports macOS 14 Sonoma or later. Liquid Glass requires macOS 26.
 Choose arm64 for Apple Silicon (M-series) or x86_64 for Intel (Apple menu →
 About This Mac). Download the matching DMG and SHA-256 file from the package
 workflow artifacts or a release, when available.
@@ -10,22 +10,23 @@ workflow artifacts or a release, when available.
 In the directory containing both downloaded files:
 
 ```sh
-shasum -a 256 -c bunch-of-keys_2.0.1_arm64.dmg.sha256
+shasum -a 256 -c Keepy_2.1.0_arm64.dmg.sha256
 ```
 
 Substitute x86_64 for an Intel download. The checksum detects download errors;
 it is only as trustworthy as the source from which you obtained it.
-Open the DMG and drag bunch-of-keys.app into Applications.
+Open the DMG and drag Keepy.app into Applications.
 
 Current locally built packages are ad-hoc signed and are not notarized.
 If Gatekeeper blocks the app, use System Settings → Privacy & Security →
 Open Anyway after attempting to open it. Only do this for a build you trust.
 Do not disable Gatekeeper system-wide.
 
-## Upgrade from 1.x
+## Upgrade from bunch-of-keys
 
-Quit the old application before replacing it. Back up
-`~/Library/Application Support/bunch-of-keys/` first. Version 2 discovers the
+Quit the old application before replacing it. Install Keepy.app and remove
+the old bunch-of-keys.app bundle from Applications. Back up
+`~/Library/Application Support/bunch-of-keys/` first. Keepy discovers the
 existing registry and vaults in the same locations and preserves their encrypted
 format. Choose the existing vault and unlock with the same master password.
 The app UI is native; window size and old webview appearance preferences are

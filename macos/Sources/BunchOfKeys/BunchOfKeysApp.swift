@@ -6,7 +6,7 @@ import CoreServices
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @StateObject private var store = AppStore()
     var body: some Scene {
-        Window("bunch-of-keys", id: "main") {
+        Window(AppLogo.name, id: "main") {
             WorkspaceView().environmentObject(store).preferredColorScheme(store.colorScheme)
                 .modifier(WindowSurface(enabled: store.settings.liquidGlass))
                 .onAppear { delegate.attach(store) }
@@ -31,8 +31,14 @@ import CoreServices
             SettingsView().environmentObject(store).preferredColorScheme(store.colorScheme)
                 .modifier(WindowSurface(enabled: store.settings.liquidGlass))
         }
-        MenuBarExtra("bunch-of-keys", systemImage: store.vault == nil ? "lock.fill" : "key.fill") {
+        MenuBarExtra {
             StatusMenu().environmentObject(store)
+        } label: {
+            HStack(spacing: 2) {
+                Image(nsImage: AppLogo.menuBarImage)
+                if store.vault == nil { Image(systemName: "lock.fill").font(.system(size: 8, weight: .semibold)) }
+            }.accessibilityElement(children: .ignore)
+                .accessibilityLabel(store.vault == nil ? "Keepy, vault locked" : "Keepy, vault unlocked")
         }
     }
 }
@@ -41,11 +47,11 @@ struct StatusMenu: View {
     @Environment(\.openWindow) private var openWindow
     var body: some View {
         Text(store.vault == nil ? "Vault locked" : store.vaultName)
-        Button("Open bunch-of-keys") { openWindow(id: "main"); NSApp.activate(ignoringOtherApps: true) }
+        Button("Open Keepy") { openWindow(id: "main"); NSApp.activate(ignoringOtherApps: true) }
         Button("Lock Vault") { store.lock() }.disabled(store.vault == nil)
         Divider()
         SettingsLink { Text("Settings…") }
-        Button("Quit bunch-of-keys") { NSApp.terminate(nil) }.keyboardShortcut("q")
+        Button("Quit Keepy") { NSApp.terminate(nil) }.keyboardShortcut("q")
     }
 }
 @MainActor final class AppDelegate: NSObject, NSApplicationDelegate {

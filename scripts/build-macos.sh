@@ -15,8 +15,12 @@ cargo build --release --locked --target "$rust_target"
 mkdir -p "target/macos/$arch"
 staging=$(mktemp -d "target/macos/$arch/staging.XXXXXX")
 trap 'rm -rf "$staging"' EXIT
-app="$staging/bunch-of-keys.app"
+app="$staging/Keepy.app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" target/swift-module-cache
+xcrun swiftc -swift-version 5 -warnings-as-errors -sdk "$SDKROOT" \
+  -target "$(uname -m)-apple-macosx14.0" -module-cache-path target/swift-module-cache \
+  macos/Sources/BunchOfKeys/AppLogo.swift scripts/render-logo.swift -o "$staging/render-logo"
+"$staging/render-logo" "$staging/icons"
 xcrun swiftc -O -swift-version 5 -warnings-as-errors -sdk "$SDKROOT" \
   -target "$arch-apple-macosx14.0" -module-cache-path target/swift-module-cache \
   macos/Sources/BunchOfKeys/*.swift -o "$app/Contents/MacOS/bunch-of-keys"
@@ -25,14 +29,14 @@ cp macos/Info.plist "$app/Contents/Info.plist"
 iconset="target/macos/$arch/AppIcon.iconset"
 mkdir -p "$iconset"
 for size in 16 32 128 256 512; do
-  sips -z "$size" "$size" icons/icon.png --out "$iconset/icon_${size}x${size}.png" >/dev/null
+  sips -z "$size" "$size" "$staging/icons/icon.png" --out "$iconset/icon_${size}x${size}.png" >/dev/null
   double=$((size * 2))
-  sips -z "$double" "$double" icons/icon.png --out "$iconset/icon_${size}x${size}@2x.png" >/dev/null
+  sips -z "$double" "$double" "$staging/icons/icon.png" --out "$iconset/icon_${size}x${size}@2x.png" >/dev/null
 done
 python3 scripts/create-icns.py "$iconset" "$app/Contents/Resources/AppIcon.icns"
 codesign --force --sign "${BOK_SIGN_IDENTITY:--}" --options runtime "$app/Contents/MacOS/bunch-of-keys-core"
 codesign --force --sign "${BOK_SIGN_IDENTITY:--}" --options runtime "$app"
-destination="target/macos/$arch/bunch-of-keys.app"
+destination="target/macos/$arch/Keepy.app"
 # Replacing the directory preserves running executable mappings during rebuilds.
 python3 - "$app" "$destination" "$staging/previous.app" <<'PY_RENAME'
 import os
@@ -53,10 +57,10 @@ if [[ "${1:-}" == --dmg ]]; then
   version=$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' macos/Info.plist)
   stage="target/macos/$arch/dmg-stage"
   mkdir -p "$stage" dist
-  ditto "$app" "$stage/bunch-of-keys.app"
+  ditto "$app" "$stage/Keepy.app"
   ln -sfn /Applications "$stage/Applications"
-  dmg="dist/bunch-of-keys_${version}_${arch}.dmg"
-  hdiutil create -ov -format UDZO -volname bunch-of-keys -srcfolder "$stage" "$dmg"
+  dmg="dist/Keepy_${version}_${arch}.dmg"
+  hdiutil create -ov -format UDZO -volname Keepy -srcfolder "$stage" "$dmg"
   (cd dist && shasum -a 256 "$(basename "$dmg")" > "$(basename "$dmg").sha256")
   echo "Built $dmg"
 fi
