@@ -1,0 +1,13 @@
+{
+  "name": "keepy-documentation",
+  "private": true,
+  "engines": { "node": ">=24", "npm": ">=11.5.1" },
+  "scripts": {
+    "docs:build": "node scripts/docs.mjs build",
+    "docs:check": "node scripts/docs.mjs check",
+    "docs:preview": "node scripts/docs.mjs preview"
+  },
+  "devDependencies": {
+    "@diplodoc/cli": "5.63.3"
+  }
+}

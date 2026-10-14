@@ -1,5 +1,19 @@
 version: 2
 updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: UTC
+    groups:
+      documentation-dependencies:
+        patterns:
+          - "*"
+    commit-message:
+      prefix: docs
+
   - package-ecosystem: cargo
     directory: /
     schedule:

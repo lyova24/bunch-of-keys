@@ -52,6 +52,9 @@ packaged application embeds the Rust service alongside the native executable.
 
 ## Documentation
 
+**[Read the documentation online](https://lyova24.github.io/keepy/)** —
+installation, illustrated user guide, SSH keys, and contributor documentation.
+
 - [User guide](docs/USER_GUIDE.md)
 - [Development and packaging](docs/DEVELOPMENT.md)
 - [Architecture](docs/ARCHITECTURE.md)

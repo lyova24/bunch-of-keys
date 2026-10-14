@@ -8,7 +8,9 @@
 
 The UI uses SwiftUI, AppKit, ServiceManagement and UniformTypeIdentifiers.
 The Rust service keeps the audited encryption and OpenSSH-agent implementation.
-No Node, Tauri CLI, GTK, D-Bus or WebKit dependencies are needed.
+No Node, Tauri CLI, GTK, D-Bus or WebKit dependencies are needed to build the
+application. The documentation site separately uses Node.js and Diplodoc;
+see [Documentation and screenshots](DOCUMENTATION.md).
 
 ## Build and run
 

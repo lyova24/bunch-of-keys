@@ -10,6 +10,10 @@ appear in the unlock screen: choose one, enter its password, and press Return.
 Create another through File → New Vault or the toolbar’s + menu.
 Switching vaults locks the current one and requires the next vault's password.
 
+![Unlock screen with the Documentation Demo vault and an empty master password input](images/unlock.png)
+
+*Select a vault and enter its master password. This is a synthetic demo vault.*
+
 One compact tree contains nested groups, entries and their fields. Use the disclosure triangles
 and arrow keys to navigate. Return expands or collapses a group or entry. Double-click an entry to edit it. Command-E edits
 the selection. Right-click for field actions, editing and deletion. The toolbar’s + menu is
@@ -25,6 +29,10 @@ and tag filters before rearranging the tree so all destination positions are
 visible.
 
 ## Colored tags and filtering
+
+![Keepy main window with nested groups, colored tags, and masked credential fields](images/main-window.png)
+
+*Expand an entry to see its fields in the same tree as its parent groups.*
 
 Groups and entries can carry several colored tags: Red, Orange, Yellow, Green,
 Blue, Purple, and Gray. Tags appear next to each item's name and stay with the
@@ -53,6 +61,10 @@ masked values; a group-name search keeps the matching subtree. Clear filters
 from the filter popover or active-filter strip to show the full tree again.
 Locking or switching vaults clears both search and selected filter colors.
 
+![Search for demo combined with the Green tag filter, showing the matching server and ancestor groups](images/tag-filter.png)
+
+*Combine text search and colored tags while keeping the matching entry's location visible.*
+
 ## Entries and fields
 
 Expand an entry to see its fields directly beneath its name. Click a value or its Copy button to copy it.
@@ -70,6 +82,10 @@ or group. You can also drag the draft’s tree row. The inline editor stays open
 and persists the complete edit. Cancel discards the draft; edited entries and
 groups request confirmation before discarding changed names, fields, ordering,
 or tags.
+
+![Entry editor with Green and Blue tags, a Text username, and a masked Secret password](images/entry-editor.png)
+
+*Choose a field type and masking independently. The secret stays masked while editing.*
 
 Vault → SSH Keys lets you paste or import named OpenSSH private keys. Existing
 keys display their algorithm, fingerprint and encryption status. Leave the key
@@ -102,6 +118,10 @@ Shift-Command-L locks immediately. Closing the window keeps the app in the menu
 bar. The menu bar offers Open, Lock, Settings and Quit; quitting locks first.
 Launch at login uses macOS Login Items and starts hidden in the menu bar. If macOS requires approval, Settings
 provides a link to the system Login Items page.
+
+![Keepy Settings showing the theme selector, Liquid Glass switch, locking, and clipboard options](images/theme-settings.png)
+
+*Choose System, Light, or Dark in Theme; Liquid Glass is a separate option on macOS 26+.*
 
 ## Backups
 

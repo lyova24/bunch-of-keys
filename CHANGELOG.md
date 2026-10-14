@@ -2,6 +2,12 @@
 
 ## 2.1.1 - 2026-10-14
 
+- Add a reproducible Diplodoc documentation site with navigation, local search,
+  pull request checks, and GitHub Pages publishing (#44).
+- Illustrate the user and SSH guides with native application screenshots using
+  synthetic data, including theme settings; document isolated demo preparation.
+- Preserve the Markdown sources and reuse the root security policy, changelog,
+  and logo assets during the site build.
 - Complete the Keepy rename across application identity, executables, native
   sources, runtime paths and documentation (#9).
 - Move existing Application Support data and backups to Keepy automatically,
