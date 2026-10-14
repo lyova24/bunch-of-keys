@@ -268,10 +268,18 @@ fn execute_mutation(state: &Arc<AppState>, command: Command) -> Result<Value, St
     serde_json::to_value(view).map_err(|e| e.to_string())
 }
 
-pub fn serve(
+pub fn serve(input: impl BufRead, output: impl Write, state: &Arc<AppState>) -> io::Result<()> {
+    serve_responses(input, output, |command| execute(state, command))
+}
+
+pub fn serve_failure(input: impl BufRead, output: impl Write, message: &str) -> io::Result<()> {
+    serve_responses(input, output, |_| Err(message.to_owned()))
+}
+
+fn serve_responses(
     mut input: impl BufRead,
     mut output: impl Write,
-    state: &Arc<AppState>,
+    mut execute_command: impl FnMut(Command) -> Result<Value, String>,
 ) -> io::Result<()> {
     loop {
         let mut bytes = Zeroizing::new(Vec::new());
@@ -294,7 +302,7 @@ pub fn serve(
             return Ok(());
         }
         let response = match serde_json::from_slice::<Request>(&bytes) {
-            Ok(request) => match execute(state, request.command) {
+            Ok(request) => match execute_command(request.command) {
                 Ok(value) => json!({"id": request.id, "result": value}),
                 Err(error) => json!({"id": request.id, "error": error}),
             },
@@ -311,6 +319,27 @@ pub fn serve(
 mod tests {
     use super::*;
     use crate::storage::{AppConfig, AppStorage};
+
+    #[test]
+    fn startup_failure_reaches_native_client_without_executing_actions() {
+        let input =
+            b"{\"id\":1,\"command\":\"bootstrap\"}\n{\"id\":2,\"command\":\"lock_vault\"}\n";
+        let message =
+            "The vault service could not initialize Keepy storage: conflicting data folders";
+        let mut output = Vec::new();
+        serve_failure(&input[..], &mut output, message).unwrap();
+        let responses: Vec<Value> = String::from_utf8(output)
+            .unwrap()
+            .lines()
+            .map(|line| serde_json::from_str(line).unwrap())
+            .collect();
+        assert_eq!(responses.len(), 2);
+        for (index, response) in responses.iter().enumerate() {
+            assert_eq!(response["id"], index + 1);
+            assert_eq!(response["error"], message);
+            assert!(response.get("result").is_none());
+        }
+    }
 
     fn run_command(state: &Arc<AppState>, command: Value) -> Result<Value, String> {
         execute(state, serde_json::from_value(command).unwrap())

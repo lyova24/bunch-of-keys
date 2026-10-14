@@ -2,7 +2,7 @@ import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
 
-private let fieldDragType = UTType(exportedAs: "dev.bunchofkeys.field")
+private let fieldDragType = UTType(exportedAs: "dev.keepy.field")
 
 struct EditorView: View {
     var route: EditorRoute
@@ -309,7 +309,7 @@ struct DraftHandle: View {
             .padding(8).background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
             .onDrag {
                 let item = NSItemProvider()
-                item.registerDataRepresentation(forTypeIdentifier: "dev.bunchofkeys.draft", visibility: .ownProcess) { completion in
+                item.registerDataRepresentation(forTypeIdentifier: "dev.keepy.draft", visibility: .ownProcess) { completion in
                     completion(Data(id.utf8), nil); return nil
                 }
                 return item

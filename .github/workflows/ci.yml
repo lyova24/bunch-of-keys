@@ -38,7 +38,7 @@ jobs:
         run: cargo test --locked
       - name: Build native application
         env:
-          BOK_ARCH: ${{ matrix.arch }}
+          KEEPY_ARCH: ${{ matrix.arch }}
         run: bash scripts/build-macos.sh
       - name: Test Swift client against the bundled service
         if: matrix.arch == 'arm64'

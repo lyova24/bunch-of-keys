@@ -1,4 +1,4 @@
-//! Cryptography, data model, and import support for bunch-of-keys.
+//! Cryptography, data model, and import support for keepy.
 
 mod crypto;
 mod import;

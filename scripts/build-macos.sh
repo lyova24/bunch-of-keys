@@ -3,7 +3,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 [[ "$(uname -s)" == Darwin ]] || { echo 'macOS is required.' >&2; exit 1; }
 bash scripts/check-version-sync.sh
-arch="${BOK_ARCH:-$(uname -m)}"
+arch="${KEEPY_ARCH:-$(uname -m)}"
 case "$arch" in
   arm64) rust_target=aarch64-apple-darwin ;;
   x86_64) rust_target=x86_64-apple-darwin ;;
@@ -19,12 +19,12 @@ app="$staging/Keepy.app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" target/swift-module-cache
 xcrun swiftc -swift-version 5 -warnings-as-errors -sdk "$SDKROOT" \
   -target "$(uname -m)-apple-macosx14.0" -module-cache-path target/swift-module-cache \
-  macos/Sources/BunchOfKeys/AppLogo.swift scripts/render-logo.swift -o "$staging/render-logo"
+  macos/Sources/Keepy/AppLogo.swift scripts/render-logo.swift -o "$staging/render-logo"
 "$staging/render-logo" "$staging/icons"
 xcrun swiftc -O -swift-version 5 -warnings-as-errors -sdk "$SDKROOT" \
   -target "$arch-apple-macosx14.0" -module-cache-path target/swift-module-cache \
-  macos/Sources/BunchOfKeys/*.swift -o "$app/Contents/MacOS/bunch-of-keys"
-cp "target/$rust_target/release/bunch-of-keys-core" "$app/Contents/MacOS/"
+  macos/Sources/Keepy/*.swift -o "$app/Contents/MacOS/keepy"
+cp "target/$rust_target/release/keepy-core" "$app/Contents/MacOS/"
 cp macos/Info.plist "$app/Contents/Info.plist"
 iconset="target/macos/$arch/AppIcon.iconset"
 mkdir -p "$iconset"
@@ -34,8 +34,8 @@ for size in 16 32 128 256 512; do
   sips -z "$double" "$double" "$staging/icons/icon.png" --out "$iconset/icon_${size}x${size}@2x.png" >/dev/null
 done
 python3 scripts/create-icns.py "$iconset" "$app/Contents/Resources/AppIcon.icns"
-codesign --force --sign "${BOK_SIGN_IDENTITY:--}" --options runtime "$app/Contents/MacOS/bunch-of-keys-core"
-codesign --force --sign "${BOK_SIGN_IDENTITY:--}" --options runtime "$app"
+codesign --force --sign "${KEEPY_SIGN_IDENTITY:--}" --options runtime "$app/Contents/MacOS/keepy-core"
+codesign --force --sign "${KEEPY_SIGN_IDENTITY:--}" --options runtime "$app"
 destination="target/macos/$arch/Keepy.app"
 # Replacing the directory preserves running executable mappings during rebuilds.
 python3 - "$app" "$destination" "$staging/previous.app" <<'PY_RENAME'

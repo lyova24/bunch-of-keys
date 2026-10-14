@@ -18,7 +18,7 @@
 - Visually inspect relevant states for every UI issue in addition to running
   automated code checks.
 - Update the version for every completed issue in `Cargo.toml`, the root
-  `bunch-of-keys` package entry in `Cargo.lock`, and both bundle version keys
+  `keepy` package entry in `Cargo.lock`, and both bundle version keys
   in `macos/Info.plist`.
 - Record the new version and a short summary in `CHANGELOG.md`.
 

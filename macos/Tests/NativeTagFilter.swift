@@ -18,7 +18,7 @@ import SwiftUI
 @MainActor enum NativeTagFilter {
     static func run(executable: URL) async throws {
         _ = NSApplication.shared
-        let board = NSPasteboard(name: .init("dev.bunchofkeys.tag-keyboard-test.\(UUID().uuidString)"))
+        let board = NSPasteboard(name: .init("dev.keepy.tag-keyboard-test.\(UUID().uuidString)"))
         defer { board.releaseGlobally() }
         let store = AppStore(core: CoreClient(executable: executable), pasteboard: board)
         await store.refresh()

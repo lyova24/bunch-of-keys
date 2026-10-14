@@ -1,14 +1,14 @@
 [package]
-name = "bunch-of-keys"
-version = "2.1.0"
+name = "keepy"
+version = "2.1.1"
 description = "Keepy, a native macOS encrypted credential manager"
-authors = ["bunch-of-keys contributors"]
+authors = ["Keepy contributors"]
 edition = "2024"
 license = "MIT"
 rust-version = "1.89"
 
 [[bin]]
-name = "bunch-of-keys-core"
+name = "keepy-core"
 path = "src/main.rs"
 
 [dependencies]

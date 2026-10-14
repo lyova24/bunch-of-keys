@@ -26,8 +26,8 @@ the selected SDK matches your compiler and linker.
 For an isolated manual run without touching your real vaults:
 
 ```sh
-BUNCH_OF_KEYS_DATA_DIR=/tmp/bok-development \
-  target/macos/$(uname -m)/Keepy.app/Contents/MacOS/bunch-of-keys
+KEEPY_DATA_DIR=/tmp/bok-development \
+  target/macos/$(uname -m)/Keepy.app/Contents/MacOS/keepy
 ```
 
 ## Checks
@@ -57,10 +57,10 @@ appearance and Liquid Glass using synthetic data before shipping UI changes.
 bash scripts/build-macos.sh --dmg
 ```
 
-The result is `dist/Keepy_2.1.0_<arch>.dmg` plus its SHA-256 checksum.
-Set BOK_ARCH=arm64 or BOK_ARCH=x86_64 to cross-build another architecture after
+The result is `dist/Keepy_2.1.1_<arch>.dmg` plus its SHA-256 checksum.
+Set KEEPY_ARCH=arm64 or KEEPY_ARCH=x86_64 to cross-build another architecture after
 installing the matching Rust target with rustup. The script signs locally with
-an ad-hoc identity by default. Set BOK_SIGN_IDENTITY to a Developer ID identity
+an ad-hoc identity by default. Set KEEPY_SIGN_IDENTITY to a Developer ID identity
 for distribution signing. Notarization is a separate release step and requires
 Apple developer credentials; ad-hoc builds are not notarized.
 
@@ -76,7 +76,7 @@ macos/Info.plist (both bundle versions), and the latest changelog entry.
 
 ## Logo assets
 
-Edit the vector shapes and palette in `macos/Sources/BunchOfKeys/AppLogo.swift`.
+Edit the vector shapes and palette in `macos/Sources/Keepy/AppLogo.swift`.
 The packaging script renders that source on the build host before generating
 the ICNS sizes. Regenerate the checked-in assets with:
 
@@ -85,7 +85,7 @@ export SDKROOT="${SDKROOT:-$(xcrun --sdk macosx --show-sdk-path)}"
 mkdir -p target/swift-module-cache
 xcrun swiftc -swift-version 5 -warnings-as-errors -sdk "$SDKROOT" \
   -module-cache-path target/swift-module-cache \
-  macos/Sources/BunchOfKeys/AppLogo.swift scripts/render-logo.swift \
+  macos/Sources/Keepy/AppLogo.swift scripts/render-logo.swift \
   -o target/render-logo
 target/render-logo icons
 ```

@@ -30,7 +30,7 @@ struct SettingsView: View {
             }.formStyle(.grouped).scrollContentBackground(.hidden)
             Divider()
             HStack {
-                Text("Version 2.0.0").font(.caption).foregroundStyle(.secondary); Spacer()
+                Text("Version \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "development")").font(.caption).foregroundStyle(.secondary); Spacer()
                 if saving { ProgressView().controlSize(.small) }
                 Button("Save") { saving = true; Task { _ = await store.saveSettings(draft); saving = false } }.disabled(draft == store.settings || saving || !store.serviceAvailable)
             }.padding(16)

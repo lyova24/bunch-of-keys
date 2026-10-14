@@ -1,6 +1,6 @@
 # SSH private keys
 
-Status: implemented and current in version 2.1.0.
+Status: implemented and current in version 2.1.1.
 
 ## Recommendation
 
@@ -11,8 +11,8 @@ never writes a private-key file.
 Each connection uses a private runtime directory containing:
 
 ```text
-<private runtime directory>/bunch-of-keys/connection-<random UUID>/agent.sock
-<private runtime directory>/bunch-of-keys/connection-<random UUID>/identity.pub
+<private runtime directory>/Keepy/connection-<random UUID>/agent.sock
+<private runtime directory>/Keepy/connection-<random UUID>/identity.pub
 ```
 
 `identity.pub` contains only the selected public key and makes that key an

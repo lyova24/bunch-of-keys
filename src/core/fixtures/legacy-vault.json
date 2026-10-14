@@ -1,0 +1,22 @@
+{
+  "magic": "BOKV",
+  "format_version": 1,
+  "vault_id": "1e2333fd-32f9-4118-903e-5e3b7f108751",
+  "kdf": {
+    "algorithm": "argon2id",
+    "parameters": {
+      "memory_kib": 65536,
+      "iterations": 3,
+      "parallelism": 1
+    },
+    "salt": "pwzLyTyl/i0q8/ctWIGOqg=="
+  },
+  "wrapped_key": {
+    "nonce": "1qwKHZyB1MOxP2Pg5Q7cm4HY7d6nNbsr",
+    "ciphertext": "cpQvVv7kvYO1RdTuAwk2o887k9bVgPPdTHTWkbVtReYGqjEVf55XPlE3DkrCJZzc"
+  },
+  "payload": {
+    "nonce": "yRCQucCWsrD5v08uhfhlLylhz/Q5ix5U",
+    "ciphertext": "cSao1hXNKS5ikB3frxWqnfk6ricPfRsNtizshDz9E4i7+kDThjANIFCM27iOA6oEBRuNeA0/DsUJKQ2+CnIovqZFEABIRWWJ5hRu2tv5+BEsCymvqAeOV9Z2nUgsemZRjVeWQRPoTZ8D/nqnnXTv5st5CxqyipRCu0T0b5KqeRbrFYWYg1olb0BvpmdsYV61Izi2GGX6G9kBg13ELIv+QhBP4nZ63r5ezT56uFr1owt67QOGHfP/NG4MWrPAQ5c9HdbKJS6G4NdHI7yfapgxgXm547JHeaDSkNcEUxXB0eTKQlx8/071/VSOLtPQb+4+0L8nyx3DX3Bhd6h5WF/kSPVeVmO24l+dyYN2up//MTDmu3LntqH54dq1F1PiFplCvAyqTn57EhjsVzfY9fg+1Q=="
+  }
+}

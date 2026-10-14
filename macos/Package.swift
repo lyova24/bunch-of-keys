@@ -3,7 +3,7 @@ import PackageDescription
 let package = Package(
     name: "Keepy",
     platforms: [.macOS(.v14)],
-    products: [.executable(name: "Keepy", targets: ["BunchOfKeys"])],
-    targets: [.executableTarget(name: "BunchOfKeys")],
+    products: [.executable(name: "Keepy", targets: ["Keepy"])],
+    targets: [.executableTarget(name: "Keepy")],
     swiftLanguageModes: [.v5]
 )

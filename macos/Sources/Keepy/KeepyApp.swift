@@ -2,7 +2,7 @@ import SwiftUI
 import AppKit
 import CoreServices
 
-@main struct BunchOfKeysApp: App {
+@main struct KeepyApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @StateObject private var store = AppStore()
     var body: some Scene {
@@ -66,7 +66,7 @@ struct StatusMenu: View {
         if launchedAtLogin { NSApp.hide(nil) }
     }
     func applicationWillFinishLaunching(_ notification: Notification) {
-        guard ProcessInfo.processInfo.environment["BUNCH_OF_KEYS_DATA_DIR"] == nil,
+        guard ProcessInfo.processInfo.environment["KEEPY_DATA_DIR"] == nil,
               let identifier = Bundle.main.bundleIdentifier else { return }
         if let existing = NSRunningApplication.runningApplications(withBundleIdentifier: identifier).first(where: { $0.processIdentifier != ProcessInfo.processInfo.processIdentifier }) {
             existing.activate(options: [.activateAllWindows])

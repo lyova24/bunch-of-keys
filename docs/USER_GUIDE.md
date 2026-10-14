@@ -1,6 +1,6 @@
 # User guide
 
-Keepy 2.1.0 requires macOS 14+. All credential data stays on your Mac.
+Keepy 2.1.1 requires macOS 14+. All credential data stays on your Mac.
 
 ## Vaults and navigation
 
@@ -105,7 +105,7 @@ provides a link to the system Login Items page.
 
 ## Backups
 
-Back up the entire `~/Library/Application Support/bunch-of-keys/` directory,
+Back up the entire `~/Library/Application Support/Keepy/` directory,
 including config.json and vaults. Vault display names and preferences in the
 registry are unencrypted; all vault contents and SSH key documents are encrypted.
 Keep each master password available separately. Copying only a vault file does

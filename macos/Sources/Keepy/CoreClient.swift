@@ -7,7 +7,7 @@ struct CoreError: LocalizedError {
 
 // A serial pipe keeps secret arguments out of argv, files, sockets and logs.
 final class CoreClient: @unchecked Sendable {
-    private let queue = DispatchQueue(label: "dev.bunchofkeys.core")
+    private let queue = DispatchQueue(label: "dev.keepy.core")
     private let process = Process()
     private let input = Pipe()
     private let output = Pipe()
@@ -18,7 +18,7 @@ final class CoreClient: @unchecked Sendable {
         let decoder = JSONDecoder(); decoder.keyDecodingStrategy = .convertFromSnakeCase; return decoder
     }()
     init(executable: URL? = nil) {
-        process.executableURL = executable ?? Bundle.main.executableURL?.deletingLastPathComponent().appendingPathComponent("bunch-of-keys-core")
+        process.executableURL = executable ?? Bundle.main.executableURL?.deletingLastPathComponent().appendingPathComponent("keepy-core")
         process.standardInput = input; process.standardOutput = output
         process.standardError = FileHandle.nullDevice
         process.terminationHandler = { _ in
@@ -73,4 +73,4 @@ final class CoreClient: @unchecked Sendable {
     }
 
 }
-extension Notification.Name { static let coreStopped = Notification.Name("BunchOfKeysCoreStopped") }
+extension Notification.Name { static let coreStopped = Notification.Name("KeepyCoreStopped") }

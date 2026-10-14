@@ -146,8 +146,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72f5acc6cb2ba439de613abc23857ec3d78374d8ed5ac84e9d11336e87da8649"
 
 [[package]]
-name = "bunch-of-keys"
-version = "2.1.0"
+name = "keepy"
+version = "2.1.1"
 dependencies = [
  "argon2",
  "base64",

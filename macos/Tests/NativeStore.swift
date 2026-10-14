@@ -4,7 +4,7 @@ import AppKit
 @MainActor enum NativeStore {
     static func run(executable: URL, vaultId: String, entryId: String, fieldId: String) async throws {
         // A private pasteboard never alters the user's clipboard during tests.
-        let board = NSPasteboard(name: .init("dev.bunchofkeys.test.\(UUID().uuidString)"))
+        let board = NSPasteboard(name: .init("dev.keepy.test.\(UUID().uuidString)"))
         defer { board.releaseGlobally() }
         let store = AppStore(core: CoreClient(executable: executable), pasteboard: board)
         await store.refresh()

@@ -39,7 +39,7 @@ import Foundation
         }.joined(separator: "\n")
         let svg = """
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="-8 -12 120 118" role="img" aria-labelledby="title">
-          <title id="title">Keepy bunch of keys logo</title>
+          <title id="title">Keepy keyring logo</title>
         \(paths)
         </svg>
 

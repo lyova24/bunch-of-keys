@@ -32,7 +32,7 @@ use tokio::{net::UnixListener, runtime::Builder, sync::watch, time::sleep};
 use uuid::Uuid;
 
 const AGENT_LIFETIME: Duration = Duration::from_secs(5 * 60);
-const SSH_HELPER_ARGUMENT: &str = "--bunch-of-keys-ssh-session";
+const SSH_HELPER_ARGUMENT: &str = "--keepy-ssh-session";
 const SSH_AGENT_RSA_SHA2_256: u32 = 2;
 const SSH_AGENT_RSA_SHA2_512: u32 = 4;
 
@@ -159,7 +159,7 @@ impl EphemeralAgent {
             .public_key()
             .to_openssh()
             .map_err(|_| SshSessionError::AgentStart)?;
-        let root = runtime_root.join("bunch-of-keys");
+        let root = runtime_root.join("Keepy");
         fs::create_dir_all(&root).map_err(|_| SshSessionError::RuntimeDirectory)?;
         fs::set_permissions(&root, fs::Permissions::from_mode(0o700))
             .map_err(|_| SshSessionError::RuntimeDirectory)?;
@@ -169,7 +169,7 @@ impl EphemeralAgent {
         // TMPDIR can already consume most of that budget. Keep the fallback
         // short (do not canonicalize /tmp) and private from creation onward.
         if session_dir.join("agent.sock").as_os_str().as_bytes().len() >= 104 {
-            session_dir = Path::new("/tmp").join(format!("bok-{session_id}"));
+            session_dir = Path::new("/tmp").join(format!("keepy-{session_id}"));
         }
         fs::DirBuilder::new()
             .mode(0o700)
@@ -205,7 +205,7 @@ impl EphemeralAgent {
         let cleanup_identity = identity_path.clone();
         let cleanup_dir = session_dir.clone();
         let Ok(agent_thread) = thread::Builder::new()
-            .name("bunch-of-keys-ssh-agent".to_owned())
+            .name("keepy-ssh-agent".to_owned())
             .spawn(move || {
                 if let Ok(runtime) = Builder::new_current_thread().enable_all().build() {
                     runtime.block_on(async move {
@@ -584,17 +584,13 @@ mod tests {
         );
         let spec = mac_terminal_command(
             Path::new("/usr/bin/open"),
-            Path::new("/Applications/Bunch of Keys.app/Contents/MacOS/bunch-of-keys-core"),
+            Path::new("/Applications/Keepy.app/Contents/MacOS/keepy-core"),
             &args,
         )
         .unwrap();
         let script = fs::read_to_string(spec.args.last().unwrap()).unwrap();
         assert!(script.contains("'host;touch-pwned'\\''"));
-        assert!(
-            script.contains(
-                "exec '/Applications/Bunch of Keys.app/Contents/MacOS/bunch-of-keys-core'"
-            )
-        );
+        assert!(script.contains("exec '/Applications/Keepy.app/Contents/MacOS/keepy-core'"));
         let request =
             parse_helper_request(std::iter::once(OsString::from("core")).chain(args)).unwrap();
         let ssh_args = ssh_arguments(

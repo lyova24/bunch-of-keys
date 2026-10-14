@@ -3,8 +3,8 @@
 <img src="icons/wordmark.svg" alt="Keepy" width="280">
 
 A native macOS application for local, encrypted credential collections.
-Formerly bunch-of-keys; existing vaults open in place.
-Current version: **2.1.0**. Requires **macOS 14 Sonoma or later**.
+Formerly bunch-of-keys; existing vaults migrate automatically to Keepy.
+Current version: **2.1.1**. Requires **macOS 14 Sonoma or later**.
 
 The interface uses SwiftUI and AppKit: a standard Mac window, a compact tree with
 keyboard navigation and drag-and-drop, native menus, file panels, and Settings.

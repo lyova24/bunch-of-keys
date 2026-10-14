@@ -25,7 +25,7 @@ import SwiftUI
 @MainActor enum NativeOutline {
     static func verifyTrailingGeometry() async throws {
         _ = NSApplication.shared
-        let board = NSPasteboard(name: .init("dev.bunchofkeys.geometry-test.\(UUID().uuidString)"))
+        let board = NSPasteboard(name: .init("dev.keepy.geometry-test.\(UUID().uuidString)"))
         defer { board.releaseGlobally() }
         let field = VaultField(id: "geometry-field", label: "Username", kind: "text", masked: false, value: "synthetic", ssh: nil)
         let leaf = VaultNode(id: "geometry-leaf", name: "A long nested entry title that must leave room for its colored tag", type: "entry", fields: [field], tags: [.blue])
@@ -93,7 +93,7 @@ import SwiftUI
     }
     static func run(executable: URL) async throws {
         try await verifyTrailingGeometry()
-        let board = NSPasteboard(name: .init("dev.bunchofkeys.outline-test.\(UUID().uuidString)"))
+        let board = NSPasteboard(name: .init("dev.keepy.outline-test.\(UUID().uuidString)"))
         defer { board.releaseGlobally() }
         let store = AppStore(core: CoreClient(executable: executable), pasteboard: board)
         await store.refresh()
@@ -160,14 +160,14 @@ import SwiftUI
         precondition(coordinator.roots.map(\.id) == [work], "A tagged child must retain its parent context")
         precondition(outline.isItemExpanded(coordinator.boxes[work]!))
         precondition(coordinator.outlineView(outline, pasteboardWriterForItem: coordinator.boxes[entry.id]!) == nil)
-        payload("dev.bunchofkeys.node", entry.id)
+        payload("dev.keepy.node", entry.id)
         precondition(coordinator.outlineView(outline, validateDrop: info, proposedItem: nil, proposedChildIndex: 0).isEmpty)
         precondition(!coordinator.outlineView(outline, acceptDrop: info, item: nil, childIndex: 0), "Filtered tree positions must never be used for moves")
         store.search = "No matching item"
         coordinator.update(store.filteredNodes)
         precondition(coordinator.roots.isEmpty)
         store.clearFilters(); coordinator.update(store.filteredNodes)
-        payload("dev.bunchofkeys.saved-field", "\(entry.id):\(secret)")
+        payload("dev.keepy.saved-field", "\(entry.id):\(secret)")
         precondition(coordinator.outlineView(outline, validateDrop: info, proposedItem: coordinator.boxes[entry.id], proposedChildIndex: 2) == .move)
         precondition(coordinator.outlineView(outline, acceptDrop: info, item: coordinator.boxes[entry.id], childIndex: 2))
         try await waitFor { store.vault?.node(entry.id)?.fields?.last?.id == secret }
@@ -176,9 +176,9 @@ import SwiftUI
         store.search = "Server"
         precondition(coordinator.outlineView(outline, validateDrop: info, proposedItem: coordinator.boxes[entry.id], proposedChildIndex: 0).isEmpty)
         store.search = ""
-        payload("dev.bunchofkeys.node", work)
+        payload("dev.keepy.node", work)
         precondition(coordinator.outlineView(outline, validateDrop: info, proposedItem: coordinator.boxes[work], proposedChildIndex: -1).isEmpty)
-        payload("dev.bunchofkeys.node", entry.id)
+        payload("dev.keepy.node", entry.id)
         precondition(coordinator.outlineView(outline, validateDrop: info, proposedItem: coordinator.boxes[other], proposedChildIndex: -1) == .move)
         precondition(coordinator.outlineView(outline, acceptDrop: info, item: coordinator.boxes[other], childIndex: -1))
         try await waitFor { store.vault?.parent(of: entry.id) == other }
@@ -190,14 +190,14 @@ import SwiftUI
         precondition(!menu.item(withTitle: "Tags")!.isEnabled, "An editor must disable context tag mutation")
         let host = coordinator.editorHost
         let nodeCount = store.vault!.nodes
-        payload("dev.bunchofkeys.draft", route.id.uuidString)
+        payload("dev.keepy.draft", route.id.uuidString)
         let draft = coordinator.boxes["draft:\(route.id)"]!
         precondition(coordinator.outlineView(outline, shouldSelectItem: draft), "Draft rows must be selectable for native dragging")
         outline.selectRowIndexes(IndexSet(integer: outline.row(forItem: draft)), byExtendingSelection: false)
         coordinator.update(store.filteredNodes)
         precondition((outline.item(atRow: outline.selectedRow) as? OutlineNode)?.id == draft.id, "Keep the draft selected while native dragging starts")
         let writer = coordinator.outlineView(outline, pasteboardWriterForItem: draft) as! NSPasteboardItem
-        precondition(writer.data(forType: .init("dev.bunchofkeys.draft")) == Data(route.id.uuidString.utf8))
+        precondition(writer.data(forType: .init("dev.keepy.draft")) == Data(route.id.uuidString.utf8))
         precondition(coordinator.outlineView(outline, validateDrop: info, proposedItem: coordinator.boxes[other], proposedChildIndex: 0) == .move)
         precondition(coordinator.outlineView(outline, acceptDrop: info, item: coordinator.boxes[other], childIndex: 0))
         coordinator.update(store.filteredNodes)

@@ -43,6 +43,7 @@ struct EditorRoute: Identifiable {
     private var lastTouch = Date.distantPast
     private var clipboardChange: Int?
     private var clipboardTask: Task<Void, Never>?
+    private var startupRegistrationSynchronized = false
     var selectedNode: VaultNode? {
         guard let node = vault?.node(selection),
               !isFiltering || filteredNodes.contains(where: { $0.find(node.id) != nil }) else { return nil }
@@ -71,6 +72,10 @@ struct EditorRoute: Identifiable {
             let result = try CoreClient.decoder.decode(Bootstrap.self, from: data)
             guard generation == epoch else { return }
             vaults = result.vaults; settings = result.settings
+            if !startupRegistrationSynchronized {
+                startupRegistrationSynchronized = true
+                synchronizeStartupRegistration(for: result.settings)
+            }
             if vault != result.current {
                 if result.current == nil { clearSession() }
                 else { vault = result.current }
@@ -79,6 +84,13 @@ struct EditorRoute: Identifiable {
             if selectedVaultId.isEmpty { selectedVaultId = vaults.first?.id ?? "" }
             ready = true
         } catch { fail(error) }
+    }
+    private func synchronizeStartupRegistration(for preferences: Preferences) {
+        guard preferences.autostart,
+              ProcessInfo.processInfo.environment["KEEPY_DATA_DIR"] == nil,
+              Bundle.main.bundleIdentifier == "dev.keepy.desktop",
+              SMAppService.mainApp.status == .notRegistered else { return }
+        try? SMAppService.mainApp.register()
     }
     func touch() {
         guard serviceAvailable, Date().timeIntervalSince(lastTouch) > 1 else { return }

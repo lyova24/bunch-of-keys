@@ -1,9 +1,19 @@
 # Changelog
 
+## 2.1.1 - 2026-10-14
+
+- Complete the Keepy rename across application identity, executables, native
+  sources, runtime paths and documentation (#9).
+- Move existing Application Support data and backups to Keepy automatically,
+  preserving encrypted vaults and settings with guarded migration.
+- Migrate system preferences and caches to the new bundle identity and show
+  the actual installed version in Settings. Re-register an enabled login item
+  under the Keepy identity and explain startup migration failures.
+
 ## 2.1.0 - 2026-10-14
 
 - Renamed the application to Keepy with a thin green/blue wordmark and a
-  matching vector bunch of keys on a shared ring, reused in the application icon, menu bar, authentication
+  matching vector keyring on a shared ring, reused in the application icon, menu bar, authentication
   and empty workspace. Generate all icon sizes from the same native path (#9).
 - Preserve existing vaults, encryption, storage locations and application
   identity during the rename. Native bundles and DMGs now use the Keepy name.

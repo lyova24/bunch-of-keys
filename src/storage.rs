@@ -107,15 +107,27 @@ pub enum StorageError {
     Encode(#[source] serde_json::Error),
     #[error("cannot write application data: {0}")]
     Write(#[source] std::io::Error),
+    #[error(
+        "both previous and Keepy data directories exist; resolve the conflict before launching"
+    )]
+    MigrationConflict,
+    #[error("cannot migrate application data: {0}")]
+    Migration(#[source] std::io::Error),
 }
 
 impl AppStorage {
     pub fn discover() -> Result<Self, StorageError> {
         let base = BaseDirs::new().ok_or(StorageError::NoHomeDirectory)?;
-        Self::new(
-            base.config_dir().join("bunch-of-keys"),
-            base.data_local_dir().join("bunch-of-keys"),
-        )
+        let storage = Self::discover_in(base.data_local_dir())?;
+        migrate_identity_artifacts(&base.home_dir().join("Library"))?;
+        Ok(storage)
+    }
+
+    fn discover_in(parent: &Path) -> Result<Self, StorageError> {
+        // The app is macOS-only: registry and vaults share Application Support.
+        migrate_directories(parent)?;
+        let root = parent.join("Keepy");
+        Self::new(&root, &root)
     }
 
     pub fn new(
@@ -183,6 +195,132 @@ impl AppStorage {
             let _ = fs::remove_file(self.vault_dir.join(&record.file_name));
         }
     }
+}
+
+fn migrate_directories(parent: &Path) -> Result<(), StorageError> {
+    use std::os::unix::fs::OpenOptionsExt;
+    fs::create_dir_all(parent).map_err(StorageError::CreateDirectory)?;
+    // Keep this lock inode stable; removing it could let two migrators proceed.
+    let guard = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .mode(0o600)
+        .open(parent.join(".Keepy-migration.lock"))
+        .map_err(StorageError::Migration)?;
+    guard.try_lock().map_err(|_| StorageError::AlreadyRunning)?;
+    let legacy = crate::legacy::directory_name();
+    let pairs = [
+        (parent.join(legacy), parent.join("Keepy")),
+        (
+            parent.join(format!("{legacy}-backups")),
+            parent.join("Keepy-backups"),
+        ),
+    ];
+    let mut locks = Vec::new();
+    // Preflight every destination before changing any path.
+    for (source, destination) in &pairs {
+        if !path_exists(source)? {
+            continue;
+        }
+        if !fs::symlink_metadata(source)
+            .map_err(StorageError::Migration)?
+            .is_dir()
+        {
+            return Err(StorageError::MigrationConflict);
+        }
+        if path_exists(destination)? {
+            let meta = fs::symlink_metadata(destination).map_err(StorageError::Migration)?;
+            if !meta.is_dir()
+                || fs::read_dir(destination)
+                    .map_err(StorageError::Migration)?
+                    .next()
+                    .is_some()
+            {
+                return Err(StorageError::MigrationConflict);
+            }
+        }
+        if source == &pairs[0].0 {
+            let storage = AppStorage {
+                config_file: source.join("config.json"),
+                vault_dir: source.join("vaults"),
+            };
+            locks.push(storage.lock_instance()?);
+            let config = storage.load_config()?;
+            for record in &config.vaults {
+                storage.read_vault(record)?;
+            }
+        }
+    }
+    for (source, destination) in &pairs {
+        if !path_exists(source)? {
+            continue;
+        }
+        if path_exists(destination)? {
+            fs::remove_dir(destination).map_err(StorageError::Migration)?;
+        }
+        // Same-parent rename is atomic and retains every file and its permissions.
+        fs::rename(source, destination).map_err(StorageError::Migration)?;
+        File::open(parent)
+            .and_then(|directory| directory.sync_all())
+            .map_err(StorageError::Migration)?;
+    }
+    Ok(())
+}
+
+fn path_exists(path: &Path) -> Result<bool, StorageError> {
+    match fs::symlink_metadata(path) {
+        Ok(_) => Ok(true),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(StorageError::Migration(error)),
+    }
+}
+
+fn migrate_identity_artifacts(library: &Path) -> Result<(), StorageError> {
+    use std::os::unix::fs::OpenOptionsExt;
+    let support = library.join("Application Support");
+    let guard = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .mode(0o600)
+        .open(support.join(".Keepy-migration.lock"))
+        .map_err(StorageError::Migration)?;
+    guard.try_lock().map_err(|_| StorageError::AlreadyRunning)?;
+    let previous = format!(
+        "dev.{}.desktop",
+        crate::legacy::directory_name().replace('-', "")
+    );
+    for (folder, suffix) in [
+        ("Preferences", ".plist"),
+        ("Caches", ""),
+        ("HTTPStorages", ""),
+        ("HTTPStorages", ".binarycookies"),
+        ("Saved Application State", ".savedState"),
+    ] {
+        let source = library.join(folder).join(format!("{previous}{suffix}"));
+        if !path_exists(&source)? {
+            continue;
+        }
+        let mut destination = library
+            .join(folder)
+            .join(format!("dev.keepy.desktop{suffix}"));
+        if path_exists(&destination)? {
+            // New preferences/caches take precedence. Preserve the earlier copy
+            // under a branded backup name instead of overwriting or deleting it.
+            let archives = support.join("Keepy-backups/system");
+            create_private_dir(&archives)?;
+            destination = archives.join(format!(
+                "{}-dev.keepy.desktop-{}{suffix}",
+                folder.replace(' ', "-"),
+                Uuid::new_v4()
+            ));
+        }
+        fs::rename(&source, &destination).map_err(StorageError::Migration)?;
+    }
+    Ok(())
 }
 
 fn default_appearance() -> String {
@@ -282,6 +420,228 @@ mod tests {
     use tempfile::tempdir;
 
     use super::*;
+
+    #[test]
+    fn old_system_identity_paths_migrate_without_overwriting_new_preferences() {
+        let directory = tempdir().unwrap();
+        let library = directory.path();
+        fs::create_dir(library.join("Application Support")).unwrap();
+        fs::create_dir(library.join("Preferences")).unwrap();
+        fs::create_dir(library.join("Caches")).unwrap();
+        let old_id = format!(
+            "dev.{}.desktop",
+            crate::legacy::directory_name().replace('-', "")
+        );
+        let previous = library.join("Preferences").join(format!("{old_id}.plist"));
+        fs::write(&previous, b"previous preferences").unwrap();
+        let target = library.join("Preferences/dev.keepy.desktop.plist");
+        fs::write(&target, b"current preferences").unwrap();
+        let cache = library.join("Caches").join(&old_id);
+        fs::create_dir(&cache).unwrap();
+        fs::write(cache.join("fixture"), b"cache").unwrap();
+        migrate_identity_artifacts(library).unwrap();
+        assert!(!previous.exists() && !cache.exists());
+        assert_eq!(fs::read(target).unwrap(), b"current preferences");
+        assert_eq!(
+            fs::read(library.join("Caches/dev.keepy.desktop/fixture")).unwrap(),
+            b"cache"
+        );
+        let archived: Vec<_> =
+            fs::read_dir(library.join("Application Support/Keepy-backups/system"))
+                .unwrap()
+                .collect();
+        assert_eq!(archived.len(), 1);
+        assert_eq!(
+            fs::read(archived[0].as_ref().unwrap().path()).unwrap(),
+            b"previous preferences"
+        );
+        migrate_identity_artifacts(library).unwrap();
+    }
+
+    fn legacy_fixture(parent: &Path) -> (AppStorage, VaultRecord, Vec<u8>) {
+        let root = parent.join(crate::legacy::directory_name());
+        let storage = AppStorage::new(&root, &root).unwrap();
+        let bytes = include_bytes!("core/fixtures/legacy-vault.json").to_vec();
+        let envelope = crate::core::VaultEnvelope::from_bytes(&bytes).unwrap();
+        let record = VaultRecord {
+            id: envelope.vault_id(),
+            name: "Existing vault".into(),
+            file_name: format!("{}.bok", envelope.vault_id()),
+        };
+        let mut config = AppConfig::default();
+        config.settings.appearance = "dark".into();
+        config.settings.auto_lock_seconds = 600;
+        config.vaults.push(record.clone());
+        storage.save_config(&config).unwrap();
+        storage.write_vault(&record, &bytes).unwrap();
+        (storage, record, bytes)
+    }
+
+    #[test]
+    fn migration_preserves_bytes_settings_permissions_and_backup_tree() {
+        use std::os::unix::fs::PermissionsExt;
+        let directory = tempdir().unwrap();
+        let parent = directory.path();
+        let (old, record, bytes) = legacy_fixture(parent);
+        let config_before = fs::read(&old.config_file).unwrap();
+        let old_backups = parent.join(format!("{}-backups", crate::legacy::directory_name()));
+        fs::create_dir_all(old_backups.join("nested")).unwrap();
+        fs::write(old_backups.join("nested/snapshot.bok"), &bytes).unwrap();
+        let migrated = AppStorage::discover_in(parent).unwrap();
+        assert!(!old.config_file.parent().unwrap().exists());
+        assert!(!old_backups.exists());
+        assert_eq!(fs::read(&migrated.config_file).unwrap(), config_before);
+        assert_eq!(migrated.read_vault(&record).unwrap(), bytes);
+        assert_eq!(
+            migrated.load_config().unwrap().settings.auto_lock_seconds,
+            600
+        );
+        assert_eq!(
+            fs::read(parent.join("Keepy-backups/nested/snapshot.bok")).unwrap(),
+            bytes
+        );
+        assert_eq!(
+            fs::metadata(migrated.vault_dir.join(&record.file_name))
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777,
+            0o600
+        );
+        let envelope =
+            crate::core::VaultEnvelope::from_bytes(&migrated.read_vault(&record).unwrap()).unwrap();
+        assert!(envelope.unlock(b"synthetic-legacy-passphrase").is_ok());
+        assert_eq!(
+            AppStorage::discover_in(parent)
+                .unwrap()
+                .read_vault(&record)
+                .unwrap(),
+            bytes
+        );
+    }
+
+    #[test]
+    fn migration_refuses_running_previous_service_then_succeeds_after_exit() {
+        let directory = tempdir().unwrap();
+        let (old, record, bytes) = legacy_fixture(directory.path());
+        let lock = old.lock_instance().unwrap();
+        assert!(matches!(
+            AppStorage::discover_in(directory.path()),
+            Err(StorageError::AlreadyRunning)
+        ));
+        assert_eq!(old.read_vault(&record).unwrap(), bytes);
+        assert!(!directory.path().join("Keepy").exists());
+        drop(lock);
+        assert!(AppStorage::discover_in(directory.path()).is_ok());
+    }
+
+    #[test]
+    fn conflicting_backup_destination_prevents_any_data_move() {
+        let directory = tempdir().unwrap();
+        let (old, record, bytes) = legacy_fixture(directory.path());
+        fs::create_dir(
+            directory
+                .path()
+                .join(format!("{}-backups", crate::legacy::directory_name())),
+        )
+        .unwrap();
+        fs::create_dir(directory.path().join("Keepy-backups")).unwrap();
+        fs::write(
+            directory.path().join("Keepy-backups/existing"),
+            b"do not overwrite",
+        )
+        .unwrap();
+        assert!(matches!(
+            AppStorage::discover_in(directory.path()),
+            Err(StorageError::MigrationConflict)
+        ));
+        assert_eq!(old.read_vault(&record).unwrap(), bytes);
+        assert!(!directory.path().join("Keepy").exists());
+    }
+
+    #[test]
+    fn migration_never_overwrites_existing_data_or_symlinks() {
+        let directory = tempdir().unwrap();
+        let (old, record, bytes) = legacy_fixture(directory.path());
+        let target = directory.path().join("Keepy");
+        fs::create_dir(&target).unwrap();
+        fs::write(target.join("existing"), b"keep").unwrap();
+        assert!(matches!(
+            AppStorage::discover_in(directory.path()),
+            Err(StorageError::MigrationConflict)
+        ));
+        assert_eq!(old.read_vault(&record).unwrap(), bytes);
+        assert_eq!(fs::read(target.join("existing")).unwrap(), b"keep");
+        fs::remove_file(target.join("existing")).unwrap();
+        fs::remove_dir(&target).unwrap();
+        std::os::unix::fs::symlink(directory.path().join("missing"), &target).unwrap();
+        assert!(matches!(
+            AppStorage::discover_in(directory.path()),
+            Err(StorageError::MigrationConflict)
+        ));
+        assert_eq!(old.read_vault(&record).unwrap(), bytes);
+    }
+
+    #[test]
+    fn migration_stops_before_moving_incomplete_registered_vaults() {
+        let directory = tempdir().unwrap();
+        let (old, record, _) = legacy_fixture(directory.path());
+        fs::remove_file(old.vault_dir.join(&record.file_name)).unwrap();
+        assert!(matches!(
+            AppStorage::discover_in(directory.path()),
+            Err(StorageError::Read(_))
+        ));
+        assert!(old.config_file.exists());
+        assert!(!directory.path().join("Keepy").exists());
+    }
+
+    #[test]
+    fn migration_resumes_when_data_was_moved_before_backups() {
+        let directory = tempdir().unwrap();
+        let (old, record, bytes) = legacy_fixture(directory.path());
+        let backup = directory
+            .path()
+            .join(format!("{}-backups", crate::legacy::directory_name()));
+        fs::create_dir(&backup).unwrap();
+        fs::write(backup.join("vault.bok"), &bytes).unwrap();
+        fs::rename(
+            old.config_file.parent().unwrap(),
+            directory.path().join("Keepy"),
+        )
+        .unwrap();
+        let migrated = AppStorage::discover_in(directory.path()).unwrap();
+        assert_eq!(migrated.read_vault(&record).unwrap(), bytes);
+        assert!(!backup.exists());
+        assert_eq!(
+            fs::read(directory.path().join("Keepy-backups/vault.bok")).unwrap(),
+            bytes
+        );
+    }
+
+    #[test]
+    fn fresh_install_uses_only_keepy_and_migration_accepts_empty_destination() {
+        let directory = tempdir().unwrap();
+        let fresh = AppStorage::discover_in(directory.path()).unwrap();
+        assert_eq!(
+            fresh.config_file.parent().unwrap(),
+            directory.path().join("Keepy")
+        );
+        assert!(
+            !directory
+                .path()
+                .join(crate::legacy::directory_name())
+                .exists()
+        );
+        fs::remove_dir(fresh.vault_dir).unwrap();
+        let (_, record, bytes) = legacy_fixture(directory.path());
+        assert_eq!(
+            AppStorage::discover_in(directory.path())
+                .unwrap()
+                .read_vault(&record)
+                .unwrap(),
+            bytes
+        );
+    }
 
     #[test]
     fn legacy_settings_keep_defaults_for_native_preferences() {

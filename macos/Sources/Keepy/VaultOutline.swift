@@ -1,9 +1,9 @@
 import SwiftUI
 import AppKit
 
-private let draftPasteboardType = NSPasteboard.PasteboardType("dev.bunchofkeys.draft")
-private let nodePasteboardType = NSPasteboard.PasteboardType("dev.bunchofkeys.node")
-private let fieldPasteboardType = NSPasteboard.PasteboardType("dev.bunchofkeys.saved-field")
+private let draftPasteboardType = NSPasteboard.PasteboardType("dev.keepy.draft")
+private let nodePasteboardType = NSPasteboard.PasteboardType("dev.keepy.node")
+private let fieldPasteboardType = NSPasteboard.PasteboardType("dev.keepy.saved-field")
 
 // A small native view keeps row markers crisp at every display scale and gives
 // VoiceOver the color names as well as the visual indication.
