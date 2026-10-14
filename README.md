@@ -4,7 +4,7 @@
 
 A native macOS application for local, encrypted credential collections.
 Formerly bunch-of-keys; existing vaults migrate automatically to Keepy.
-Current version: **2.1.1**. Requires **macOS 14 Sonoma or later**.
+Current version: **2.1.2**. Requires **macOS 14 Sonoma or later**.
 
 The interface uses SwiftUI and AppKit: a standard Mac window, a compact tree with
 keyboard navigation and drag-and-drop, native menus, file panels, and Settings.
@@ -51,6 +51,9 @@ The Swift source also has a Swift Package manifest for opening in Xcode. The
 packaged application embeds the Rust service alongside the native executable.
 
 ## Documentation
+
+**[Read the documentation online](https://lyova24.github.io/keepy/)** —
+installation, illustrated user guide, SSH keys, and contributor documentation.
 
 - [User guide](docs/USER_GUIDE.md)
 - [Development and packaging](docs/DEVELOPMENT.md)

@@ -5,6 +5,7 @@
 *.tmp
 *.bak
 .DS_Store
+.idea/
 
 # Local vaults and development state must never be committed.
 *.bok

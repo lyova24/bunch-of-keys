@@ -1,0 +1,73 @@
+name: Documentation
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'docs/**'
+      - 'icons/**'
+      - 'README.md'
+      - 'SECURITY.md'
+      - 'CHANGELOG.md'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.node-version'
+      - 'scripts/docs.mjs'
+      - '.github/workflows/docs.yml'
+  pull_request:
+    paths:
+      - 'docs/**'
+      - 'icons/**'
+      - 'README.md'
+      - 'SECURITY.md'
+      - 'CHANGELOG.md'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.node-version'
+      - 'scripts/docs.mjs'
+      - '.github/workflows/docs.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: documentation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    name: Build and check documentation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - run: npm ci --ignore-scripts --no-fund --no-audit
+      - run: npm run docs:build
+      - run: npm run docs:check
+      - uses: actions/upload-pages-artifact@v3
+        if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
+        with:
+          path: target/docs-site
+
+  deploy:
+    name: Publish to GitHub Pages
+    if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/configure-pages@v5
+      - name: Deploy documentation
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,13 @@
+lang: en
+allowHtml: false
+staticContent: true
+strict: true
+supportGithubAnchors: true
+search:
+  provider: local
+interface:
+  feedback: false
+docs-viewer:
+  lang: en
+  logo-options:
+    title: Keepy

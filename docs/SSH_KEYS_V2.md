@@ -1,6 +1,6 @@
 # SSH private keys
 
-Status: implemented and current in version 2.1.1.
+Status: implemented and current in version 2.1.2.
 
 ## Recommendation
 
@@ -47,6 +47,18 @@ The helper marks SSH completion in its private directory so the agent can stop
 without waiting for the entire Terminal application to quit.
 
 ## Security properties and limitations
+
+![SSH Keys manager showing a demonstration key's name, algorithm, and fingerprint with an empty private-key input](images/ssh-keys.png)
+
+*Stored keys expose metadata here. Keep the private-key input empty when renaming a key.*
+
+![SSH field editor showing the demonstration user, reserved host, port, and selected key](images/ssh-field.png)
+
+*A connection field refers to a stored key; it does not duplicate the private key.*
+
+![Unlock SSH Key dialog with an empty passphrase input and Cancel and Connect buttons](images/ssh-passphrase.png)
+
+*Encrypted keys prompt for a passphrase for each connection. The demo uses a reserved host.*
 
 An agent prevents accidental private-key file exposure, but any process running
 as the same user and knowing the unpredictable socket path could ask an active

@@ -1,0 +1,27 @@
+title: Keepy
+href: index.md
+items:
+  - name: Get started
+    expanded: true
+    items:
+      - name: Overview
+        href: index.md
+      - name: Install on macOS
+        href: INSTALL_MACOS.md
+      - name: User guide
+        href: USER_GUIDE.md
+      - name: SSH private keys
+        href: SSH_KEYS_V2.md
+  - name: For contributors
+    expanded: true
+    items:
+      - name: Development and packaging
+        href: DEVELOPMENT.md
+      - name: Architecture
+        href: ARCHITECTURE.md
+      - name: Documentation and screenshots
+        href: DOCUMENTATION.md
+  - name: Security policy
+    href: SECURITY.md
+  - name: Changelog
+    href: CHANGELOG.md

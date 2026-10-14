@@ -8,7 +8,9 @@
 
 The UI uses SwiftUI, AppKit, ServiceManagement and UniformTypeIdentifiers.
 The Rust service keeps the audited encryption and OpenSSH-agent implementation.
-No Node, Tauri CLI, GTK, D-Bus or WebKit dependencies are needed.
+No Node, Tauri CLI, GTK, D-Bus or WebKit dependencies are needed to build the
+application. The documentation site separately uses Node.js and Diplodoc;
+see [Documentation and screenshots](DOCUMENTATION.md).
 
 ## Build and run
 
@@ -57,7 +59,7 @@ appearance and Liquid Glass using synthetic data before shipping UI changes.
 bash scripts/build-macos.sh --dmg
 ```
 
-The result is `dist/Keepy_2.1.1_<arch>.dmg` plus its SHA-256 checksum.
+The result is `dist/Keepy_2.1.2_<arch>.dmg` plus its SHA-256 checksum.
 Set KEEPY_ARCH=arm64 or KEEPY_ARCH=x86_64 to cross-build another architecture after
 installing the matching Rust target with rustup. The script signs locally with
 an ad-hoc identity by default. Set KEEPY_SIGN_IDENTITY to a Developer ID identity

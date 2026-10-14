@@ -1,6 +1,6 @@
 # Architecture
 
-Version 2.1.1 is macOS-only. The presentation layer is SwiftUI/AppKit, built
+Version 2.1.2 is macOS-only. The presentation layer is SwiftUI/AppKit, built
 against the macOS SDK with a macOS 14 deployment target. There is no webview,
 HTML/JavaScript frontend, or Tauri runtime.
 
