@@ -24,6 +24,9 @@ async function build() {
   await cp(join(root, 'docs'), source, { recursive: true });
   for (const name of ['SECURITY.md', 'CHANGELOG.md']) {
     await cp(join(root, name), join(source, name));
+    // Root Markdown links into docs/ become siblings in the generated site.
+    const copied = join(source, name);
+    await writeFile(copied, (await readFile(copied, 'utf8')).replaceAll(/\]\(docs\//g, ']('));
   }
   await mkdir(join(source, '_assets'), { recursive: true });
   for (const name of ['wordmark.svg', 'icon.png']) {

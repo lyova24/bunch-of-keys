@@ -123,6 +123,9 @@ struct WorkspaceView: View {
         }
         .sheet(item: Binding(get: { store.editor?.isInline == false ? store.editor : nil }, set: { if $0 == nil && store.editor?.isInline == false { store.editor = nil } })) { route in EditorView(route: route).environmentObject(store).preferredColorScheme(store.colorScheme) }
         .sheet(isPresented: $store.showingKeys) { SSHKeysEditor().environmentObject(store).preferredColorScheme(store.colorScheme) }
+        .sheet(isPresented: $store.showingTouchIDSetup, onDismiss: { store.cancelTouchIDSetup() }) { TouchIDSettingsView().environmentObject(store).preferredColorScheme(store.colorScheme) }
+        .task(id: store.touchIDVaultID) { await store.refreshTouchID() }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in Task { await store.refreshTouchID() } }
         .sheet(isPresented: Binding(get: { store.sshPrompt != nil }, set: { if !$0 { store.sshPrompt = nil } })) { SSHPassphraseView().environmentObject(store) }
         .alert(AppLogo.name, isPresented: Binding(get: { store.error != nil && store.editor == nil && store.sshPrompt == nil && !store.showingKeys }, set: { if !$0 { store.error = nil } })) {
             Button("OK") { store.error = nil }
@@ -143,6 +146,7 @@ struct WorkspaceView: View {
         if store.vault != nil {
             Divider()
             Button("SSH Keys…") { store.showingKeys = true }
+            Button("Touch ID…") { store.manageTouchID() }.disabled(!store.canManageTouchID).help(store.touchIDHelp)
         }
         Divider()
         SettingsLink { Text("Settings…") }
@@ -335,11 +339,25 @@ struct AuthenticationView: View {
                     else { Text(creating ? "Create Vault" : "Unlock").frame(maxWidth: .infinity) }
                 }.buttonStyle(.borderedProminent).controlSize(.large).keyboardShortcut(.defaultAction)
                     .disabled(store.busy || !store.serviceAvailable || (creating ? name.trimmingCharacters(in: .whitespaces).isEmpty || password.count < 8 || password != confirmation : password.isEmpty || store.selectedVaultId.isEmpty))
+                if !creating {
+                    if store.touchIDEnrolled && store.touchIDUnavailableReason == nil {
+                        Button { password = ""; Task { await store.unlockWithTouchID() } } label: {
+                            Label("Unlock with Touch ID", systemImage: "touchid").frame(maxWidth: .infinity)
+                        }.controlSize(.large).disabled(store.busy || !store.serviceAvailable)
+                    }
+                    if store.touchIDInProgress {
+                        Button("Cancel Touch ID") { store.lock() }
+                    }
+                    if let message = store.touchIDMessage ?? (store.touchIDEnrolled ? store.touchIDUnavailableReason : nil) {
+                        Text(message).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    }
+                }
             }.frame(width: 280)
         }.padding(28).modifier(GlassSurface(enabled: store.settings.liquidGlass)).padding(24)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .onAppear { passwordFocused = true }
             .onChange(of: store.selectedVaultId) { _, _ in password = "" }
+            .onDisappear { password = ""; confirmation = "" }
     }
 }
 struct InlineEditor: View {

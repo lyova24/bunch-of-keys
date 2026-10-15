@@ -66,6 +66,13 @@ an ad-hoc identity by default. Set KEEPY_SIGN_IDENTITY to a Developer ID identit
 for distribution signing. Notarization is a separate release step and requires
 Apple developer credentials; ad-hoc builds are not notarized.
 
+Touch ID requires an explicit macOS provisioning profile authorizing the app's
+private Keychain group. Set `KEEPY_PROVISIONING_PROFILE` to that profile and
+`KEEPY_SIGN_IDENTITY` to the matching Apple signing identity. The build validates
+the decoded profile, embeds it, and signs the app with its private app identifier
+and Keychain group. Ad-hoc builds remain supported with password unlocking.
+See [Touch ID design and verification](TOUCH_ID.md) for details and hardware checks.
+
 The manual GitHub package workflow accepts a branch/tag/commit and builds both
 architectures on macOS 26. CI also checks both native bundles, Rust and Swift.
 The Intel bundle is cross-compiled on Apple Silicon; interactive runtime checks

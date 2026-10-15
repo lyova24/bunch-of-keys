@@ -50,6 +50,13 @@ if [[ "${KEEPY_SIGN_IDENTITY:--}" != - ]]; then
   done
 fi
 app_signing=()
+if [[ -n "${KEEPY_PROVISIONING_PROFILE:-}" ]]; then
+  [[ "${KEEPY_SIGN_IDENTITY:--}" != - ]] || { echo 'Touch ID provisioning requires an Apple signing identity.' >&2; exit 1; }
+  security cms -D -i "$KEEPY_PROVISIONING_PROFILE" -o "$staging/profile.plist"
+  python3 scripts/prepare-keychain-signing.py "$staging/profile.plist" dev.keepy.desktop "$staging/keychain.entitlements"
+  cp "$KEEPY_PROVISIONING_PROFILE" "$app/Contents/embedded.provisionprofile"
+  app_signing=(--entitlements "$staging/keychain.entitlements")
+fi
 if [[ "${KEEPY_SIGN_IDENTITY:--}" == - ]]; then
   # Ad-hoc executables have no Team ID. Library validation would reject even
   # the checksum-pinned Sparkle framework at launch without this entitlement.

@@ -1,6 +1,6 @@
 # User guide
 
-Keepy 2.1.1 requires macOS 14+. All credential data stays on your Mac.
+Keepy 2.2.2 requires macOS 14+. All credential data stays on your Mac.
 
 ## Vaults and navigation
 
@@ -27,6 +27,33 @@ Moves that create cycles are rejected. Search matches names, labels, visible
 values, and SSH connection metadata. Masked values are excluded. Clear search
 and tag filters before rearranging the tree so all destination positions are
 visible.
+
+## Touch ID
+
+On a Mac with enrolled Touch ID, a provisioned signed build can unlock each
+vault using biometrics. Unlock with the master password first, then choose
+Vault → Touch ID… (also available in the toolbar's vault menu). Enter the current
+master password, choose Enable Touch ID, and approve the native macOS prompt.
+Enrollment is complete only after a biometric-protected Keychain read succeeds.
+
+After locking, select that vault and choose Unlock with Touch ID. Every unlock
+requires a fresh native authentication. Cancelling leaves the vault locked;
+the password field remains available. No prompts appear automatically. To remove
+the enrollment, unlock the vault and choose Disable Touch ID in the same dialog.
+
+Enrollment belongs to this vault on this Mac and is not synchronized or included
+in a vault backup. Renaming the vault retains enrollment. Changing its password
+protection invalidates the old enrollment; unlock with the current master
+password and set up Touch ID again. Adding or removing enrolled fingerprints
+also invalidates the protected Keychain item. If Touch ID is locked or otherwise
+unavailable, use the master password. This is not password recovery: keep the
+master password available separately, including for older backups.
+
+Ad-hoc builds do not have the provisioning needed for biometric Keychain access.
+Their Touch ID dialog explains the limitation and password unlocking continues
+to work. Hover over the Touch ID menu item or the dialog's information icon to
+see an explanatory tooltip. See [Touch ID design and verification](TOUCH_ID.md) for signing setup
+and release checks.
 
 ## Colored tags and filtering
 

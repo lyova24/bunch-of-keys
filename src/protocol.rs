@@ -1,6 +1,6 @@
 use crate::{
     app::AppState,
-    core::{FieldInput, TagColor, import_yaml},
+    core::{BiometricCredential, FieldInput, TagColor, import_yaml},
     storage::Settings,
 };
 use serde::Deserialize;
@@ -31,6 +31,21 @@ enum Command {
     UnlockVault {
         vault_id: Uuid,
         password: String,
+    },
+    BiometricBinding {
+        vault_id: Uuid,
+    },
+    EnrollBiometric {
+        vault_id: Uuid,
+        password: String,
+    },
+    BeginBiometricUnlock {
+        vault_id: Uuid,
+    },
+    UnlockBiometric {
+        vault_id: Uuid,
+        ticket: Uuid,
+        credential: BiometricCredential,
     },
     AddGroup {
         parent_id: Option<Uuid>,
@@ -145,6 +160,33 @@ fn execute(state: &Arc<AppState>, command: Command) -> Result<Value, String> {
                     .map_err(|e| e.to_string())?,
             )
         }
+        Command::BiometricBinding { vault_id } => serde_json::to_value(
+            state
+                .biometric_binding(vault_id)
+                .map_err(|e| e.to_string())?,
+        ),
+        Command::EnrollBiometric { vault_id, password } => {
+            let password = Zeroizing::new(password);
+            serde_json::to_value(
+                state
+                    .enroll_biometric(vault_id, password.as_bytes())
+                    .map_err(|e| e.to_string())?,
+            )
+        }
+        Command::BeginBiometricUnlock { vault_id } => serde_json::to_value(
+            state
+                .begin_biometric_unlock(vault_id)
+                .map_err(|e| e.to_string())?,
+        ),
+        Command::UnlockBiometric {
+            vault_id,
+            ticket,
+            credential,
+        } => serde_json::to_value(
+            state
+                .unlock_biometric(vault_id, ticket, &credential)
+                .map_err(|e| e.to_string())?,
+        ),
         Command::OpenUrl { entry_id, field_id } => serde_json::to_value(
             state
                 .open_url(entry_id, field_id)
@@ -301,18 +343,35 @@ fn serve_responses(
         if bytes.is_empty() {
             return Ok(());
         }
-        let response = match serde_json::from_slice::<Request>(&bytes) {
+        let response = SensitiveResponse(match serde_json::from_slice::<Request>(&bytes) {
             Ok(request) => match execute_command(request.command) {
                 Ok(value) => json!({"id": request.id, "result": value}),
                 Err(error) => json!({"id": request.id, "error": error}),
             },
             Err(_) => json!({"id": 0, "error": "invalid request"}),
-        };
-        let mut encoded = serde_json::to_vec(&response)?;
+        });
+        let mut encoded = Zeroizing::new(serde_json::to_vec(&response.0)?);
         output.write_all(&encoded)?;
         output.write_all(b"\n")?;
         output.flush()?;
         encoded.zeroize();
+    }
+}
+
+// Includes dedicated enrollment responses and explicitly revealed field values.
+// Clear the JSON-owned strings even if writing the pipe fails.
+struct SensitiveResponse(Value);
+impl Drop for SensitiveResponse {
+    fn drop(&mut self) {
+        fn clear(value: &mut Value) {
+            match value {
+                Value::String(text) => text.zeroize(),
+                Value::Array(items) => items.iter_mut().for_each(clear),
+                Value::Object(items) => items.values_mut().for_each(clear),
+                _ => {}
+            }
+        }
+        clear(&mut self.0);
     }
 }
 #[cfg(test)]
@@ -343,6 +402,83 @@ mod tests {
 
     fn run_command(state: &Arc<AppState>, command: Value) -> Result<Value, String> {
         execute(state, serde_json::from_value(command).unwrap())
+    }
+
+    #[test]
+    fn biometric_pipe_enrollment_unlock_and_cancellation_are_vault_bound() {
+        let fixture = tagged_fixture();
+        let state = &fixture.state;
+        let id = &fixture.vault_id;
+        assert!(
+            run_command(
+                state,
+                json!({"command":"enroll_biometric", "vault_id":id,"password":"wrong"})
+            )
+            .is_err()
+        );
+        let credential = run_command(
+            state,
+            json!({"command":"enroll_biometric", "vault_id":id,"password":"password123"}),
+        )
+        .unwrap();
+        let before = run_command(state, json!({"command":"bootstrap"})).unwrap();
+        assert!(
+            !serde_json::to_string(&before)
+                .unwrap()
+                .contains("wrapping_key")
+        );
+        assert!(before["current"]["nodes"][0]["children"][0]["fields"][0]["value"].is_null());
+        let binding =
+            run_command(state, json!({"command":"biometric_binding", "vault_id":id})).unwrap();
+        assert_eq!(binding, credential["binding"]);
+        run_command(state, json!({"command":"lock_vault"})).unwrap();
+        assert!(
+            run_command(
+                state,
+                json!({"command":"enroll_biometric", "vault_id":id,"password":"password123"})
+            )
+            .is_err()
+        );
+
+        let ticket = run_command(
+            state,
+            json!({"command":"begin_biometric_unlock", "vault_id":id}),
+        )
+        .unwrap();
+        let unlock = json!({"command":"unlock_biometric","vault_id":id,"ticket":ticket,"credential":credential});
+        let restored = run_command(state, unlock.clone()).unwrap();
+        assert_eq!(restored, before["current"]);
+        assert!(
+            run_command(state, unlock).is_err(),
+            "A completed ticket cannot be reused"
+        );
+        let ticket = run_command(
+            state,
+            json!({"command":"begin_biometric_unlock", "vault_id":id}),
+        )
+        .unwrap();
+        run_command(state, json!({"command":"lock_vault"})).unwrap();
+        assert!(run_command(state, json!({"command":"unlock_biometric","vault_id":id,"ticket":ticket,"credential":credential})).is_err());
+        assert!(run_command(state, json!({"command":"bootstrap"})).unwrap()["current"].is_null());
+
+        let ticket = run_command(
+            state,
+            json!({"command":"begin_biometric_unlock", "vault_id":id}),
+        )
+        .unwrap();
+        run_command(
+            state,
+            json!({"command":"create_vault","name":"Other","password":"other-password"}),
+        )
+        .unwrap();
+        assert!(run_command(state, json!({"command":"unlock_biometric","vault_id":id,"ticket":ticket,"credential":credential})).is_err());
+        assert!(
+            run_command(
+                state,
+                json!({"command":"enroll_biometric", "vault_id":id,"password":"password123"})
+            )
+            .is_err()
+        );
     }
 
     struct TaggedFixture {

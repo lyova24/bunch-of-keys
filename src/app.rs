@@ -12,7 +12,9 @@ use uuid::Uuid;
 use zeroize::Zeroizing;
 
 use crate::{
-    core::{FieldKind, SshConnection, UnlockedVault, VaultData, VaultEnvelope},
+    core::{
+        BiometricCredential, FieldKind, SshConnection, UnlockedVault, VaultData, VaultEnvelope,
+    },
     ssh_session::{EphemeralAgent, SshSessionError, TerminalLauncher, monitor_terminal},
     storage::{AppConfig, AppStorage, Settings, StorageError, VaultRecord},
     view::VaultView,
@@ -31,6 +33,13 @@ pub struct AppState {
     session: Mutex<Option<Session>>,
     last_activity: Mutex<Instant>,
     active_ssh: Mutex<HashMap<(Uuid, Uuid), ActiveSshSession>>,
+    biometric_request: Mutex<Option<BiometricRequest>>,
+}
+
+struct BiometricRequest {
+    vault_id: Uuid,
+    ticket: Uuid,
+    started: Instant,
 }
 
 struct ActiveSshSession {
@@ -74,6 +83,8 @@ pub enum AppError {
     WeakPassword,
     #[error("vault metadata does not match the encrypted file")]
     VaultIdMismatch,
+    #[error("Touch ID request expired or was cancelled. Try again or use the master password.")]
+    InvalidBiometricRequest,
     #[error(transparent)]
     Storage(#[from] StorageError),
     #[error(transparent)]
@@ -104,6 +115,7 @@ impl AppState {
             session: Mutex::new(None),
             last_activity: Mutex::new(Instant::now()),
             active_ssh: Mutex::new(HashMap::new()),
+            biometric_request: Mutex::new(None),
         }
     }
 
@@ -139,6 +151,9 @@ impl AppState {
     }
 
     pub fn lock(&self) -> bool {
+        if let Ok(mut request) = self.biometric_request.lock() {
+            *request = None;
+        }
         self.stop_ssh_sessions();
         self.session
             .lock()
@@ -244,6 +259,95 @@ impl AppState {
             .session
             .lock()
             .map_err(|_| AppError::StateUnavailable)? = Some(Session { record, vault });
+        Ok(view)
+    }
+
+    fn biometric_envelope(&self, vault_id: Uuid) -> Result<(VaultRecord, VaultEnvelope), AppError> {
+        let record = self
+            .config
+            .lock()
+            .map_err(|_| AppError::StateUnavailable)?
+            .vaults
+            .iter()
+            .find(|record| record.id == vault_id)
+            .cloned()
+            .ok_or(AppError::VaultNotFound)?;
+        let envelope = VaultEnvelope::from_bytes(&self.storage.read_vault(&record)?)?;
+        if envelope.vault_id() != vault_id {
+            return Err(AppError::VaultIdMismatch);
+        }
+        Ok((record, envelope))
+    }
+
+    pub fn biometric_binding(&self, vault_id: Uuid) -> Result<String, AppError> {
+        Ok(self.biometric_envelope(vault_id)?.1.biometric_binding()?)
+    }
+
+    pub fn enroll_biometric(
+        &self,
+        vault_id: Uuid,
+        password: &[u8],
+    ) -> Result<BiometricCredential, AppError> {
+        let session = self
+            .session
+            .lock()
+            .map_err(|_| AppError::StateUnavailable)?;
+        let current = session
+            .as_ref()
+            .filter(|s| s.record.id == vault_id)
+            .ok_or(AppError::Locked)?;
+        // Verify the current on-disk wrapping, not a stale in-memory envelope.
+        let envelope = VaultEnvelope::from_bytes(&self.storage.read_vault(&current.record)?)?;
+        if envelope.vault_id() != vault_id {
+            return Err(AppError::VaultIdMismatch);
+        }
+        self.touch();
+        Ok(envelope.biometric_credential(password)?)
+    }
+
+    pub fn begin_biometric_unlock(&self, vault_id: Uuid) -> Result<Uuid, AppError> {
+        self.lock();
+        self.biometric_envelope(vault_id)?;
+        self.touch();
+        let ticket = Uuid::new_v4();
+        *self
+            .biometric_request
+            .lock()
+            .map_err(|_| AppError::StateUnavailable)? = Some(BiometricRequest {
+            vault_id,
+            ticket,
+            started: Instant::now(),
+        });
+        Ok(ticket)
+    }
+
+    pub fn unlock_biometric(
+        &self,
+        vault_id: Uuid,
+        ticket: Uuid,
+        credential: &BiometricCredential,
+    ) -> Result<VaultView, AppError> {
+        // The lock also serializes installation of the session against locking.
+        let mut pending = self
+            .biometric_request
+            .lock()
+            .map_err(|_| AppError::StateUnavailable)?;
+        let request = pending
+            .take()
+            .filter(|r| {
+                r.vault_id == vault_id
+                    && r.ticket == ticket
+                    && r.started.elapsed() < Duration::from_secs(60)
+            })
+            .ok_or(AppError::InvalidBiometricRequest)?;
+        let (record, envelope) = self.biometric_envelope(request.vault_id)?;
+        let vault = envelope.unlock_biometric(credential)?;
+        let view = VaultView::from_data(vault_id, vault.data());
+        *self
+            .session
+            .lock()
+            .map_err(|_| AppError::StateUnavailable)? = Some(Session { record, vault });
+        self.touch();
         Ok(view)
     }
 
@@ -473,6 +577,43 @@ mod tests {
     fn accepts_master_passwords_from_eight_characters() {
         assert!(validate_password(b"12345678").is_ok());
         assert!(validate_password(b"1234567").is_err());
+    }
+
+    #[test]
+    fn biometric_tickets_expire_and_cannot_cross_vaults_or_service_restarts() {
+        let directory = tempdir().unwrap();
+        let storage = AppStorage::new(directory.path(), directory.path()).unwrap();
+        let state = AppState::new(storage.clone(), AppConfig::default());
+        let first = state.create_vault("First", b"test-password").unwrap().id;
+        let credential = state.enroll_biometric(first, b"test-password").unwrap();
+        let second = state.create_vault("Second", b"other-password").unwrap().id;
+        let ticket = state.begin_biometric_unlock(first).unwrap();
+        state
+            .biometric_request
+            .lock()
+            .unwrap()
+            .as_mut()
+            .unwrap()
+            .started -= Duration::from_secs(61);
+        assert!(state.unlock_biometric(first, ticket, &credential).is_err());
+        let ticket = state.begin_biometric_unlock(second).unwrap();
+        assert!(state.unlock_biometric(second, ticket, &credential).is_err());
+        assert!(state.bootstrap().unwrap().current.is_none());
+        let ticket = state.begin_biometric_unlock(first).unwrap();
+        let restarted = AppState::new(storage.clone(), storage.load_config().unwrap());
+        assert!(
+            restarted
+                .unlock_biometric(first, ticket, &credential)
+                .is_err()
+        );
+        let fresh = restarted.begin_biometric_unlock(first).unwrap();
+        assert_eq!(
+            restarted
+                .unlock_biometric(first, fresh, &credential)
+                .unwrap()
+                .id,
+            first
+        );
     }
 
     #[test]

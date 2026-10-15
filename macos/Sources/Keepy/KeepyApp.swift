@@ -29,6 +29,7 @@ import CoreServices
                 Button("Lock Vault") { store.lock() }.keyboardShortcut("l", modifiers: [.command, .shift]).disabled(store.vault == nil)
                 Button("Edit Selection…") { if let node = store.selectedNode { store.edit(node) } }.keyboardShortcut("e").disabled(store.selectedNode == nil || store.busy || store.editor != nil)
                 Button("SSH Keys…") { store.showingKeys = true }.disabled(store.vault == nil || store.busy || store.editor != nil)
+                Button("Touch ID…") { store.manageTouchID() }.disabled(!store.canManageTouchID).help(store.touchIDHelp)
             }
         }
         Settings {
@@ -105,14 +106,15 @@ struct StatusMenu: View {
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        if store?.busy == true {
+        if store?.touchIDInProgress == true { store?.lock() }
+        if store?.busy == true && store?.touchIDInProgress != true {
             let alert = NSAlert()
             alert.messageText = "Keepy is saving changes"
             alert.informativeText = "Wait for the current operation to finish, then try again."
             alert.runModal()
             return .terminateCancel
         }
-        if let store, store.hasPendingEdits {
+        if let store, store.hasPendingEdits && !store.touchIDInProgress {
             let alert = NSAlert()
             alert.messageText = "Discard unsaved changes and quit?"
             alert.informativeText = "An editor or unsaved Settings is open. Choose Keep Editing to save your changes before quitting or restarting for an update."

@@ -72,5 +72,14 @@ final class CoreClient: @unchecked Sendable {
         }
     }
 
+    // Keep dedicated Keychain material out of view models and published state.
+    func unlockBiometric(vaultID: String, ticket: String, credential: Data) async throws -> Data {
+        guard credential.count <= 4096,
+              let value = try JSONSerialization.jsonObject(with: credential) as? [String: Any] else {
+            throw TouchIDError.missing
+        }
+        return try await request("unlock_biometric", ["vault_id": vaultID, "ticket": ticket, "credential": value])
+    }
+
 }
 extension Notification.Name { static let coreStopped = Notification.Name("KeepyCoreStopped") }

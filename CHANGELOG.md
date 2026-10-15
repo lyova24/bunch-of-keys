@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.2.2 - 2026-10-16
+
+- Add optional per-vault Touch ID enrollment and unlocking through the macOS
+  Data Protection Keychain, with current-biometry access controls and continued
+  master-password access (#55).
+- Bind enrollment to the vault and its password wrapping; cancel pending unlocks
+  on lock, switch, and shutdown, and reject expired or reused unlock requests.
+- Support provisioning profiles for signed builds; explain Touch ID unavailability
+  in ad-hoc builds without weakening Keychain protection. Document signing,
+  fallback, and hardware verification requirements.
+- Explain Touch ID unavailability in English tooltips on menu items and the
+  information indicator in the Touch ID dialog.
+
 ## 2.2.1 - 2026-10-15
 
 - Enable arrow-key navigation immediately after opening or unlocking a vault,

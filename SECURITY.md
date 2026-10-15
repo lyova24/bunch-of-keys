@@ -34,6 +34,21 @@ modified file from requesting unreasonable memory or CPU resources.
 
 ## Runtime handling
 
+Optional Touch ID stores a vault-bound password-derived wrapping key in the
+macOS Data Protection Keychain, guarded by `biometryCurrentSet` and
+`WhenUnlockedThisDeviceOnly`, with synchronization disabled. It does not store
+the master password. Each unlock uses a fresh LAContext with authentication
+reuse disabled, and the Keychain item itself requires biometric authentication.
+There is no fallback to an unprotected item or the device login password.
+The normal vault master password remains an independent fallback.
+
+Enrollment is invalidated by changes to the biometric set or vault password
+wrapping. A wrapping key can still open older copies with the same wrapping;
+password changes cannot revoke access to already copied vaults or keys. The
+feature requires a provisioned Apple-signed build; ad-hoc builds cannot enable
+it. It does not change the same-user malware and unlocked-memory limitations
+above. See [Touch ID design](docs/TOUCH_ID.md).
+
 - Password strings and cryptographic keys are zeroized on drop where the Rust
   ownership model permits it.
 - Masked values are not sent to the native UI until the user explicitly reveals

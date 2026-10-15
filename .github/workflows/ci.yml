@@ -30,6 +30,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Check synchronized version
         run: bash scripts/check-version-sync.sh
+      - name: Validate Touch ID signing profile handling
+        run: python3 scripts/test-keychain-signing.py
       - name: Check Rust formatting
         run: cargo fmt --all -- --check
       - name: Run Clippy

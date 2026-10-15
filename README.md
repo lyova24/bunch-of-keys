@@ -4,7 +4,7 @@
 
 A native macOS application for local, encrypted credential collections.
 Formerly bunch-of-keys; existing vaults migrate automatically to Keepy.
-Current version: **2.1.1**. Requires **macOS 14 Sonoma or later**.
+Current version: **2.2.2**. Requires **macOS 14 Sonoma or later**.
 
 The interface uses SwiftUI and AppKit: a standard Mac window, a compact tree with
 keyboard navigation and drag-and-drop, native menus, file panels, and Settings.
@@ -18,6 +18,8 @@ Linux and Windows are no longer supported.
 ## Features
 
 - Multiple independent vaults with separate master passwords.
+- Optional per-vault Touch ID unlock on supported Macs with a provisioned,
+  signed build; master-password unlock remains available in every build.
 - Recursive groups and entries; direct tree and field drag-and-drop; search
   through names, labels, and visible values without searching masked secrets.
 - macOS-style colored tags on groups and entries, with multiple tags per item

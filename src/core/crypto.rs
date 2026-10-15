@@ -10,7 +10,7 @@ use rand::{RngCore, rngs::OsRng};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use uuid::Uuid;
-use zeroize::Zeroizing;
+use zeroize::{Zeroize, Zeroizing};
 
 use super::VaultData;
 
@@ -75,6 +75,22 @@ pub struct UnlockedVault {
     data: VaultData,
 }
 
+/// Only returned by explicit password-verified enrollment, never a vault view.
+/// The password-derived wrapping key cannot unlock a rewrapped vault.
+#[derive(Serialize, Deserialize)]
+pub struct BiometricCredential {
+    version: u16,
+    vault_id: Uuid,
+    binding: String,
+    wrapping_key: String,
+}
+
+impl Drop for BiometricCredential {
+    fn drop(&mut self) {
+        self.wrapping_key.zeroize();
+    }
+}
+
 impl fmt::Debug for UnlockedVault {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
@@ -102,6 +118,10 @@ pub enum CryptoError {
     InvalidPasswordOrDamagedVault,
     #[error("the encrypted vault payload is damaged")]
     DamagedPayload,
+    #[error(
+        "Touch ID enrollment is no longer valid. Unlock with the master password and set up Touch ID again."
+    )]
+    InvalidBiometricCredential,
     #[error("vault data cannot be serialized")]
     Serialize(#[source] serde_json::Error),
     #[error("vault data cannot be decoded")]
@@ -176,9 +196,72 @@ impl VaultEnvelope {
         self.validate_header()?;
         let salt = decode_array::<SALT_LEN>(&self.kdf.salt)?;
         let wrapping_key = derive_key(password, &salt, self.kdf.parameters)?;
+        self.unlock_with_wrapping_key(&wrapping_key)
+    }
+
+    /// Public envelope metadata; changes when the password wrapping changes,
+    /// but not on ordinary edits or vault renames. No new on-disk format.
+    pub fn biometric_binding(&self) -> Result<String, CryptoError> {
+        let bytes = serde_json::to_vec(&(
+            self.format_version,
+            self.vault_id,
+            &self.kdf,
+            &self.wrapped_key,
+        ))
+        .map_err(CryptoError::Serialize)?;
+        Ok(BASE64.encode(bytes))
+    }
+
+    pub fn biometric_credential(
+        &self,
+        password: &[u8],
+    ) -> Result<BiometricCredential, CryptoError> {
+        self.validate_header()?;
+        let salt = decode_array::<SALT_LEN>(&self.kdf.salt)?;
+        let wrapping_key = derive_key(password, &salt, self.kdf.parameters)?;
+        // Check both the wrapped key and authenticated payload before export.
+        let _verified = self.clone().unlock_with_wrapping_key(&wrapping_key)?;
+        Ok(BiometricCredential {
+            version: 1,
+            vault_id: self.vault_id,
+            binding: self.biometric_binding()?,
+            wrapping_key: BASE64.encode(&wrapping_key[..]),
+        })
+    }
+
+    pub fn unlock_biometric(
+        self,
+        credential: &BiometricCredential,
+    ) -> Result<UnlockedVault, CryptoError> {
+        self.validate_header()?;
+        if credential.version != 1
+            || credential.vault_id != self.vault_id
+            || credential.binding != self.biometric_binding()?
+            || credential.wrapping_key.len() != 44
+        {
+            return Err(CryptoError::InvalidBiometricCredential);
+        }
+        let bytes = Zeroizing::new(
+            BASE64
+                .decode(&credential.wrapping_key)
+                .map_err(|_| CryptoError::InvalidBiometricCredential)?,
+        );
+        let mut key = Zeroizing::new([0_u8; KEY_LEN]);
+        if bytes.len() != KEY_LEN {
+            return Err(CryptoError::InvalidBiometricCredential);
+        }
+        key.copy_from_slice(&bytes);
+        self.unlock_with_wrapping_key(&key)
+            .map_err(|_| CryptoError::InvalidBiometricCredential)
+    }
+
+    fn unlock_with_wrapping_key(
+        self,
+        wrapping_key: &[u8; KEY_LEN],
+    ) -> Result<UnlockedVault, CryptoError> {
         let decrypted_key = Zeroizing::new(
             decrypt_blob(
-                &wrapping_key,
+                wrapping_key,
                 &self.wrapped_key,
                 associated_data(self.vault_id, "wrapped-key").as_bytes(),
             )
@@ -530,5 +613,83 @@ mod tests {
             envelope.unlock(b"correct horse battery staple"),
             Err(CryptoError::DamagedPayload)
         ));
+    }
+
+    #[test]
+    fn biometric_material_is_password_verified_and_survives_payload_edits() {
+        let unlocked =
+            VaultEnvelope::create_with_parameters(b"synthetic-password", sample_data(), TEST_KDF)
+                .unwrap();
+        let envelope = unlocked.envelope();
+        assert!(envelope.biometric_credential(b"incorrect").is_err());
+        let credential = envelope
+            .biometric_credential(b"synthetic-password")
+            .unwrap();
+        assert!(
+            !serde_json::to_string(&credential)
+                .unwrap()
+                .contains("synthetic-password")
+        );
+        let mut edited = unlocked.data().clone();
+        edited.add_group(None, "New group").unwrap();
+        let updated = unlocked.prepare_update(&edited).unwrap();
+        assert_eq!(
+            updated.biometric_binding().unwrap(),
+            envelope.biometric_binding().unwrap()
+        );
+        assert_eq!(
+            updated.unlock_biometric(&credential).unwrap().data(),
+            &edited
+        );
+
+        let other =
+            VaultEnvelope::create_with_parameters(b"synthetic-password", sample_data(), TEST_KDF)
+                .unwrap();
+        assert!(
+            other
+                .envelope()
+                .clone()
+                .unlock_biometric(&credential)
+                .is_err()
+        );
+        let mut invalid = credential;
+        invalid.wrapping_key = BASE64.encode([0; KEY_LEN]);
+        assert!(envelope.clone().unlock_biometric(&invalid).is_err());
+        invalid.wrapping_key = "invalid".to_owned();
+        assert!(envelope.clone().unlock_biometric(&invalid).is_err());
+        invalid.version = 2;
+        assert!(envelope.clone().unlock_biometric(&invalid).is_err());
+    }
+
+    #[test]
+    fn password_rewrapping_invalidates_biometric_material_without_changing_data() {
+        let unlocked =
+            VaultEnvelope::create_with_parameters(b"old-password", sample_data(), TEST_KDF)
+                .unwrap();
+        let old = unlocked
+            .envelope()
+            .biometric_credential(b"old-password")
+            .unwrap();
+        let mut changed = unlocked.envelope().clone();
+        let salt = random_bytes::<SALT_LEN>().unwrap();
+        let key = derive_key(b"new-password", &salt, TEST_KDF).unwrap();
+        changed.kdf.salt = BASE64.encode(salt);
+        changed.wrapped_key = encrypt_blob(
+            &key,
+            &unlocked.key[..],
+            associated_data(unlocked.vault_id(), "wrapped-key").as_bytes(),
+        )
+        .unwrap();
+        assert!(changed.clone().unlock_biometric(&old).is_err());
+        assert!(changed.clone().unlock(b"old-password").is_err());
+        assert_eq!(
+            changed.clone().unlock(b"new-password").unwrap().data(),
+            unlocked.data()
+        );
+        let current = changed.biometric_credential(b"new-password").unwrap();
+        assert_eq!(
+            changed.unlock_biometric(&current).unwrap().data(),
+            unlocked.data()
+        );
     }
 }

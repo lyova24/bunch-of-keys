@@ -28,6 +28,8 @@ items:
         href: USER_GUIDE.md
       - name: SSH private keys
         href: SSH_KEYS_V2.md
+      - name: Touch ID
+        href: TOUCH_ID.md
   - name: For contributors
     expanded: true
     items:

@@ -109,6 +109,7 @@ import Foundation
         _ = try await reopened.request("lock_vault")
         await reopened.stop()
         try await NativeStore.run(executable: executable, vaultId: created.id, entryId: entry.id, fieldId: secret.id)
+        try await NativeTouchID.run(executable: executable)
         try await NativeOutline.run(executable: executable)
         try await NativeWindowSurface.run()
         try await NativeTagFilter.run(executable: executable)

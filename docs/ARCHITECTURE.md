@@ -1,6 +1,6 @@
 # Architecture
 
-Version 2.1.1 is macOS-only. The presentation layer is SwiftUI/AppKit, built
+Version 2.2.2 is macOS-only. The presentation layer is SwiftUI/AppKit, built
 against the macOS SDK with a macOS 14 deployment target. There is no webview,
 HTML/JavaScript frontend, or Tauri runtime.
 
@@ -48,6 +48,16 @@ responses contain no masked values or private key documents. Explicit reveal,
 edit and copy actions request field values separately. The native pasteboard clears only
 while its change counter still matches the app's write. Locking clears pending
 clipboard data owned by the app as well as reveals, drafts, and active agents.
+
+Optional Touch ID uses the native Data Protection Keychain. Explicit enrollment
+re-verifies the current vault's on-disk password wrapping and sends a dedicated
+credential over the inherited pipe, outside ordinary view/bootstrap payloads.
+The Keychain stores the 32-byte password-derived wrapping key in a versioned,
+vault-bound credential under a current-biometry ACL; it never stores the password.
+Unlock uses a one-use, 60-second backend ticket. Locking invalidates the ticket
+and the native LAContext; UI generation checks reject late results. No extra
+server or unlock socket exists. See [Touch ID](TOUCH_ID.md) for the complete design,
+signing constraints, and hardware verification procedure.
 
 A backend watchdog enforces inactivity independently of the native UI's polling.
 Local AppKit input updates activity. NSWorkspace sleep, display-sleep and session

@@ -18,7 +18,14 @@ struct EditorRoute: Identifiable {
     @Published var vaults: [VaultSummary] = []
     @Published var settings = Preferences()
     @Published var vault: Vault?
-    @Published var selectedVaultId = ""
+    @Published var selectedVaultId = "" {
+        didSet {
+            if oldValue != selectedVaultId {
+                if touchIDInProgress { lock() }
+                touchIDEnrolled = false; touchIDMessage = nil
+            }
+        }
+    }
     @Published var selection: String?
     @Published var search = ""
     @Published var tagFilter = Set<TagColor>()
@@ -32,16 +39,23 @@ struct EditorRoute: Identifiable {
     @Published var editor: EditorRoute?
     @Published var showingKeys = false
     @Published var settingsHaveChanges = false
+    @Published var showingTouchIDSetup = false
+    @Published var touchIDEnrolled = false
+    @Published var touchIDUnavailableReason: String?
+    @Published var touchIDMessage: String?
+    @Published var touchIDInProgress = false
     var hasPendingEdits: Bool {
         UpdatePolicy.blocksRestart(busy: busy, editor: editor != nil, keys: showingKeys,
-                                  prompt: sshPrompt != nil, settings: settingsHaveChanges)
+                                  prompt: sshPrompt != nil || showingTouchIDSetup, settings: settingsHaveChanges)
     }
     @Published var deleteTarget: VaultNode?
     @Published var sshPrompt: (entry: String, field: String)?
     let core: CoreClient
     private let pasteboard: NSPasteboard
-    init(core: CoreClient = CoreClient(), pasteboard: NSPasteboard = .general) {
+    let biometricKeychain: BiometricKeychain
+    init(core: CoreClient = CoreClient(), pasteboard: NSPasteboard = .general, biometricKeychain: BiometricKeychain? = nil) {
         self.core = core; self.pasteboard = pasteboard
+        self.biometricKeychain = biometricKeychain ?? SystemBiometricKeychain()
     }
     private var epoch = 0
     private var polling = false
@@ -49,6 +63,7 @@ struct EditorRoute: Identifiable {
     private var clipboardChange: Int?
     private var clipboardTask: Task<Void, Never>?
     private var startupRegistrationSynchronized = false
+    private var pendingLock: Task<Void, Never>?
     var selectedNode: VaultNode? {
         guard let node = vault?.node(selection),
               !isFiltering || filteredNodes.contains(where: { $0.find(node.id) != nil }) else { return nil }
@@ -62,7 +77,7 @@ struct EditorRoute: Identifiable {
     var isFiltering: Bool { !search.isEmpty || !tagFilter.isEmpty }
     var canFilterTags: Bool {
         ready && serviceAvailable && vault != nil && !busy && editor == nil &&
-        !showingKeys && sshPrompt == nil && deleteTarget == nil && error == nil
+        !showingKeys && !showingTouchIDSetup && sshPrompt == nil && deleteTarget == nil && error == nil
     }
     var filteredNodes: [VaultNode] { (vault?.nodes ?? []).compactMap { $0.filtered(search, tags: tagFilter) } }
     func clearFilters() { search = ""; tagFilter.removeAll() }
@@ -73,6 +88,7 @@ struct EditorRoute: Identifiable {
         polling = true; defer { polling = false }
         let generation = epoch
         do {
+            await pendingLock?.value
             let data = try await core.request("bootstrap")
             let result = try CoreClient.decoder.decode(Bootstrap.self, from: data)
             guard generation == epoch else { return }
@@ -103,13 +119,18 @@ struct EditorRoute: Identifiable {
         Task { _ = try? await core.request("touch") }
     }
     func clearSession() {
+        biometricKeychain.cancel(); showingTouchIDSetup = false
         vault = nil; selection = nil; clearFilters(); revealed.removeAll(); activeSSH.removeAll()
         editor = nil; showingKeys = false; sshPrompt = nil; deleteTarget = nil; notice = nil
         clearClipboard()
     }
     func lock() {
         epoch += 1; clearSession()
-        Task { do { _ = try await core.request("lock_vault") } catch { fail(error) } }
+        let previous = pendingLock
+        pendingLock = Task {
+            await previous?.value
+            do { _ = try await core.request("lock_vault") } catch { fail(error) }
+        }
     }
     func fail(_ failure: Error) {
         if (failure as? CoreError)?.message.contains("service") == true { epoch += 1; clearSession(); serviceAvailable = false }
@@ -117,6 +138,7 @@ struct EditorRoute: Identifiable {
     }
     func authenticate(name: String? = nil, password: String) async -> Bool {
         guard !busy, serviceAvailable else { return false }
+        touchIDMessage = nil
         busy = true; defer { busy = false }; touch()
         epoch += 1
         let authenticationEditor = editor
@@ -124,6 +146,8 @@ struct EditorRoute: Identifiable {
         editor = authenticationEditor
         let generation = epoch
         do {
+            await pendingLock?.value
+            guard generation == epoch else { return false }
             let data: Data
             if let name { data = try await core.request("create_vault", ["name": name, "password": password]) }
             else { data = try await core.request("unlock_vault", ["vault_id": selectedVaultId, "password": password]) }
@@ -132,8 +156,10 @@ struct EditorRoute: Identifiable {
             revealed.removeAll(); selection = nil; search = ""; vault = result
             selectedVaultId = result.id
             let bootstrap = try CoreClient.decoder.decode(Bootstrap.self, from: await core.request("bootstrap"))
+            guard epoch == generation, vault?.id == result.id else { return false }
             vaults = bootstrap.vaults; editor = nil
-            return true
+            await refreshTouchID()
+            return epoch == generation && vault?.id == result.id
         } catch { fail(error); return false }
     }
     @discardableResult func mutate(_ command: String, _ args: [String: Any]) async -> Bool {
@@ -278,5 +304,122 @@ struct EditorRoute: Identifiable {
             settings = preferences; return true
         } catch { fail(error); return false }
     }
-    func shutdown() async { epoch += 1; clearSession(); _ = try? await core.request("lock_vault"); await core.stop() }
+    func shutdown() async { epoch += 1; clearSession(); await pendingLock?.value; _ = try? await core.request("lock_vault"); await core.stop() }
+
+    var touchIDVaultID: String { vault?.id ?? selectedVaultId }
+    var touchIDHelp: String { touchIDUnavailableReason ?? "Manage Touch ID unlocking for this vault on this Mac." }
+    var canManageTouchID: Bool {
+        vault != nil && ready && serviceAvailable && !busy && editor == nil && !showingKeys &&
+        sshPrompt == nil && deleteTarget == nil && !settingsHaveChanges
+    }
+
+    func refreshTouchID() async {
+        let id = touchIDVaultID, generation = epoch
+        guard !id.isEmpty, serviceAvailable, !touchIDInProgress else { return }
+        touchIDUnavailableReason = biometricKeychain.unavailableReason
+        do {
+            let saved = try biometricKeychain.binding(vaultID: id)
+            guard let saved else { touchIDEnrolled = false; return }
+            let current = try JSONDecoder().decode(String.self, from: await core.request("biometric_binding", ["vault_id": id]))
+            guard generation == epoch, touchIDVaultID == id, !touchIDInProgress else { return }
+            if saved == current { touchIDEnrolled = true }
+            else {
+                try biometricKeychain.remove(vaultID: id)
+                touchIDEnrolled = false
+                touchIDMessage = "The vault's password protection changed. Unlock with the master password and set up Touch ID again."
+            }
+        } catch {
+            guard generation == epoch, touchIDVaultID == id, !touchIDInProgress else { return }
+            touchIDUnavailableReason = error.localizedDescription
+            touchIDMessage = error.localizedDescription
+            // Allow removal of an inaccessible enrollment from the unlocked vault.
+            touchIDEnrolled = true
+        }
+    }
+
+    func manageTouchID() {
+        guard canManageTouchID else { return }
+        touchIDMessage = nil; showingTouchIDSetup = true
+        Task { await refreshTouchID() }
+    }
+
+    func cancelTouchIDSetup() {
+        epoch += 1; biometricKeychain.cancel(); showingTouchIDSetup = false
+    }
+
+    func disableTouchID() {
+        guard canManageTouchID, let id = vault?.id else { return }
+        epoch += 1
+        do {
+            try biometricKeychain.remove(vaultID: id)
+            touchIDEnrolled = false; touchIDMessage = "Touch ID disabled for this vault."
+            touchIDUnavailableReason = biometricKeychain.unavailableReason
+        } catch { touchIDMessage = error.localizedDescription }
+    }
+
+    func enableTouchID(password: String) async {
+        guard canManageTouchID, let id = vault?.id, !touchIDEnrolled else { return }
+        epoch += 1
+        busy = true; touchIDInProgress = true; touchIDMessage = nil; touch()
+        defer { busy = false; touchIDInProgress = false }
+        let generation = epoch
+        var saved = false
+        do {
+            var credential = try await core.request("enroll_biometric", ["vault_id": id, "password": password])
+            defer { credential.resetBytes(in: 0..<credential.count) }
+            guard generation == epoch, vault?.id == id else { return }
+            guard credential.count <= 4096 else { throw TouchIDError.missing }
+            struct Identity: Decodable { var vaultId: String; var binding: String }
+            let identity = try CoreClient.decoder.decode(Identity.self, from: credential)
+            guard identity.vaultId == id else { throw TouchIDError.missing }
+            try await biometricKeychain.enroll(credential, vaultID: id, binding: identity.binding, reason: "Enable Touch ID for \(vaultName)")
+            saved = true
+            guard generation == epoch, vault?.id == id, showingTouchIDSetup else {
+                try biometricKeychain.remove(vaultID: id); return
+            }
+            // Catch backend idle locking during a long native authentication.
+            let state = try CoreClient.decoder.decode(Bootstrap.self, from: await core.request("bootstrap"))
+            guard generation == epoch, state.current?.id == id else {
+                try biometricKeychain.remove(vaultID: id); clearSession(); return
+            }
+            touchIDEnrolled = true; touchIDUnavailableReason = nil; touchIDMessage = "Touch ID enabled for this vault."
+        } catch {
+            if saved { try? biometricKeychain.remove(vaultID: id) }
+            guard generation == epoch else { return }
+            touchIDMessage = error.localizedDescription
+        }
+    }
+
+    func unlockWithTouchID() async {
+        guard !busy, serviceAvailable, vault == nil, touchIDEnrolled,
+              touchIDUnavailableReason == nil, !selectedVaultId.isEmpty else { return }
+        let id = selectedVaultId
+        epoch += 1; clearSession()
+        let generation = epoch
+        busy = true; touchIDInProgress = true; touchIDMessage = nil; error = nil
+        defer { busy = false; touchIDInProgress = false }
+        do {
+            await pendingLock?.value
+            guard generation == epoch, selectedVaultId == id else { return }
+            let ticket = try JSONDecoder().decode(String.self, from: await core.request("begin_biometric_unlock", ["vault_id": id]))
+            guard generation == epoch, selectedVaultId == id else { return }
+            let name = vaults.first { $0.id == id }?.name ?? "vault"
+            var credential = try await biometricKeychain.retrieve(vaultID: id, reason: "Unlock \(name) in Keepy")
+            defer { credential.resetBytes(in: 0..<credential.count) }
+            guard generation == epoch, selectedVaultId == id else { return }
+            let data = try await core.unlockBiometric(vaultID: id, ticket: ticket, credential: credential)
+            let result = try CoreClient.decoder.decode(Vault.self, from: data)
+            guard generation == epoch, selectedVaultId == id, result.id == id else { return }
+            vault = result; selection = nil; revealed.removeAll(); clearFilters()
+        } catch {
+            guard generation == epoch, selectedVaultId == id else { return }
+            _ = try? await core.request("lock_vault")
+            touchIDMessage = error.localizedDescription
+            if case TouchIDError.missing = error {
+                try? biometricKeychain.remove(vaultID: id); touchIDEnrolled = false
+            } else if error.localizedDescription.hasPrefix("Touch ID enrollment is no longer valid") {
+                try? biometricKeychain.remove(vaultID: id); touchIDEnrolled = false
+            }
+        }
+    }
 }
