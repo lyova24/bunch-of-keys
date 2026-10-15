@@ -100,8 +100,36 @@ final class HostedOutlineCell: NSTableCellView {
 final class VaultOutlineView: NSOutlineView {
     var activate: (() -> Void)?
     var delete: (() -> Void)?
+    var requestInitialFocus: (() -> Void)?
+    var claimNavigationFocus: (() -> Bool)?
+    private var keyboardMonitor: Any?
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        detachKeyboardMonitor()
+        guard window != nil else { return }
+        requestInitialFocus?()
+        keyboardMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self, let window = self.window, event.window === window, window.isKeyWindow,
+                  window.firstResponder !== self, Self.isPlainArrow(event),
+                  self.claimNavigationFocus?() == true else { return event }
+            self.keyDown(with: event)
+            return nil
+        }
+    }
+    func detachKeyboardMonitor() {
+        if let keyboardMonitor { NSEvent.removeMonitor(keyboardMonitor); self.keyboardMonitor = nil }
+    }
+    private static func isPlainArrow(_ event: NSEvent) -> Bool {
+        [UInt16(123), 124, 125, 126].contains(event.keyCode) &&
+        event.modifierFlags.intersection([.shift, .command, .control, .option]).isEmpty
+    }
     override func keyDown(with event: NSEvent) {
-        if event.keyCode == 36 || event.keyCode == 76 { activate?() }
+        if selectedRow == -1, numberOfRows > 0, Self.isPlainArrow(event) {
+            let row = event.keyCode == 126 ? numberOfRows - 1 : 0
+            selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+            scrollRowToVisible(row)
+        }
+        else if event.keyCode == 36 || event.keyCode == 76 { activate?() }
         else if event.keyCode == 51 { delete?() }
         else { super.keyDown(with: event) }
     }
@@ -128,6 +156,8 @@ struct VaultOutline: NSViewRepresentable {
         outline.target = coordinator; outline.doubleAction = #selector(Coordinator.doubleClick)
         outline.activate = { [weak coordinator] in coordinator?.activate() }
         outline.delete = { [weak coordinator] in coordinator?.contextItem = nil; coordinator?.remove() }
+        outline.requestInitialFocus = { [weak coordinator] in coordinator?.scheduleInitialFocus() }
+        outline.claimNavigationFocus = { [weak coordinator] in coordinator?.claimKeyboardFocus() == true }
         let menu = NSMenu(); menu.delegate = coordinator; outline.menu = menu
         let scroll = NSScrollView(); scroll.documentView = outline; scroll.hasVerticalScroller = true
         scroll.drawsBackground = false; scroll.autohidesScrollers = true
@@ -135,6 +165,9 @@ struct VaultOutline: NSViewRepresentable {
         return scroll
     }
     func updateNSView(_ scroll: NSScrollView, context: Context) { context.coordinator.update(store.filteredNodes) }
+    static func dismantleNSView(_ scroll: NSScrollView, coordinator: Coordinator) {
+        coordinator.outline?.detachKeyboardMonitor()
+    }
 
     @MainActor final class Coordinator: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegate, NSMenuDelegate {
         let store: AppStore
@@ -148,8 +181,35 @@ struct VaultOutline: NSViewRepresentable {
         var expanded = Set<String>()
         var updating = false
         var didFocus = false
+        private var focusScheduled = false
         var contextItem: OutlineNode?
         init(_ store: AppStore) { self.store = store }
+
+        func scheduleInitialFocus() {
+            guard !didFocus, !focusScheduled else { return }
+            focusScheduled = true
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.focusScheduled = false
+                if !self.didFocus { _ = self.claimKeyboardFocus() }
+            }
+        }
+        @discardableResult func claimKeyboardFocus() -> Bool {
+            guard store.canFilterTags, let outline, let window = outline.window,
+                  window.attachedSheet == nil, NSApp.modalWindow == nil else { return false }
+            let responder = window.firstResponder
+            let neutral: Bool
+            if let text = responder as? NSTextView, text.isFieldEditor {
+                // A removed authentication field may leave the shared field
+                // editor behind. An attached search/editor always keeps focus.
+                neutral = (text.delegate as? NSView)?.window !== window
+            } else {
+                neutral = responder == nil || responder === window || responder === window.contentView || responder === outline
+            }
+            guard neutral, window.makeFirstResponder(outline) else { return false }
+            didFocus = true
+            return true
+        }
 
         func update(_ nodes: [VaultNode]) {
             guard let outline else { return }
@@ -226,14 +286,7 @@ struct VaultOutline: NSViewRepresentable {
             var fieldRows = IndexSet()
             for row in 0..<outline.numberOfRows where (outline.item(atRow: row) as? OutlineNode)?.field != nil { fieldRows.insert(row) }
             outline.noteHeightOfRows(withIndexesChanged: fieldRows)
-            if !didFocus, !nodes.isEmpty, route == nil {
-                didFocus = true
-                DispatchQueue.main.async { [weak self, weak outline] in
-                    guard let self, let outline, let window = outline.window, self.store.editor == nil else { return }
-                    window.makeFirstResponder(outline)
-                    if self.store.selection == nil { outline.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false) }
-                }
-            }
+            scheduleInitialFocus()
             let selectedNodeId = selectedItem?.node?.id ?? selectedItem?.entryId ?? selectedItem?.route?.parentId
             if let selectedItem, selectedNodeId == store.selection,
                let item = boxes[selectedItem.id], outline.row(forItem: item) >= 0 {

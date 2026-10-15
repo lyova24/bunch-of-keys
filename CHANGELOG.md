@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.2.1 - 2026-10-15
+
+- Enable arrow-key navigation immediately after opening or unlocking a vault,
+  while leaving the tree unselected until the first navigation action (#46).
+- Retry initial focus when the outline actually joins its window; preserve
+  search, editor and dialog focus and handle empty trees without selecting rows.
+
 ## 2.2.0 - 2026-10-15
 
 - Add authenticated in-app updates with Sparkle, manual menu checks, automatic

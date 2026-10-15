@@ -17,6 +17,7 @@ xcrun swiftc -swift-version 5 -warnings-as-errors -sdk "$SDKROOT" \
   macos/Sources/Keepy/WindowSurface.swift \
   macos/Sources/Keepy/UpdateController.swift macos/Tests/NativeUpdates.swift \
   macos/Tests/NativeOutline.swift macos/Tests/NativeWindowSurface.swift \
+  macos/Tests/NativeOutlineKeyboard.swift \
   macos/Tests/NativeTagFilter.swift \
   macos/Tests/Integration.swift -o "$scratch/integration"
 KEEPY_DATA_DIR="$scratch/data" "$scratch/integration" \

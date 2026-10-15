@@ -3,6 +3,7 @@ import Foundation
 @main struct Integration {
     static func main() async throws {
         NativeUpdates.run()
+        try await NativeOutlineKeyboard.run()
         try verifyTagFiltering()
         let executable = URL(fileURLWithPath: CommandLine.arguments[1])
         let client = CoreClient(executable: executable)
