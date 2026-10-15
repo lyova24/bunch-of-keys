@@ -5,13 +5,21 @@
   <key>CFBundleDisplayName</key><string>Keepy</string>
   <key>CFBundleIdentifier</key><string>dev.keepy.desktop</string>
   <key>CFBundleExecutable</key><string>keepy</string>
-  <key>CFBundleShortVersionString</key><string>2.1.1</string>
-  <key>CFBundleVersion</key><string>2.1.1</string>
+  <key>CFBundleShortVersionString</key><string>2.2.0</string>
+  <key>CFBundleVersion</key><string>2.2.0</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>LSApplicationCategoryType</key><string>public.app-category.utilities</string>
   <key>NSHighResolutionCapable</key><true/>
   <key>NSPrincipalClass</key><string>NSApplication</string>
+  <key>SUFeedURL</key><string>https://github.com/lyova24/keepy/releases/latest/download/appcast.xml</string>
+  <key>SUPublicEDKey</key><string>A6aNWXsY/xUtpnlspXfRjnww6f/oMExuayuIAIIuymY=</string>
+  <key>SUEnableAutomaticChecks</key><true/>
+  <key>SUAllowsAutomaticUpdates</key><false/>
+  <key>SUAutomaticallyUpdate</key><false/>
+  <key>SUEnableSystemProfiling</key><false/>
+  <key>SUVerifyUpdateBeforeExtraction</key><true/>
+  <key>SURequireSignedFeed</key><true/>
   <key>NSHumanReadableCopyright</key><string>Copyright © 2026 Keepy contributors</string>
 </dict></plist>

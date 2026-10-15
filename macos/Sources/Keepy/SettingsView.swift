@@ -3,6 +3,7 @@ import ServiceManagement
 
 struct SettingsView: View {
     @EnvironmentObject var store: AppStore
+    @EnvironmentObject var updates: UpdateController
     @State private var draft = Preferences()
     @State private var saving = false
     var body: some View {
@@ -26,6 +27,17 @@ struct SettingsView: View {
                         Button("Allow in Login Items Settings…") { SMAppService.openSystemSettingsLoginItems() }
                     }
                 }
+                Section("Updates") {
+                    Toggle("Automatically check for updates", isOn: Binding(
+                        get: { updates.automaticallyChecks }, set: { updates.setAutomaticallyChecks($0) }
+                    )).disabled(updates.configurationError != nil)
+                    Button("Check for Updates…") { updates.check() }.disabled(!updates.canCheck)
+                    if let error = updates.configurationError {
+                        Text(error).font(.caption).foregroundStyle(.secondary)
+                    } else {
+                        Text("Updates are downloaded and installed only with your approval.").font(.caption).foregroundStyle(.secondary)
+                    }
+                }
                 EditorError()
             }.formStyle(.grouped).scrollContentBackground(.hidden)
             Divider()
@@ -34,7 +46,10 @@ struct SettingsView: View {
                 if saving { ProgressView().controlSize(.small) }
                 Button("Save") { saving = true; Task { _ = await store.saveSettings(draft); saving = false } }.disabled(draft == store.settings || saving || !store.serviceAvailable)
             }.padding(16)
-        }.frame(width: 500, height: 500)
+        }.frame(width: 500, height: 600)
             .onAppear { draft = store.settings; store.error = nil }
+            .onChange(of: draft) { _, value in store.settingsHaveChanges = value != store.settings }
+            .onChange(of: store.settings) { _, value in store.settingsHaveChanges = draft != value }
+            .onDisappear { store.settingsHaveChanges = false }
     }
 }

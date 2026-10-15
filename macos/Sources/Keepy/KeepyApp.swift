@@ -5,15 +5,19 @@ import CoreServices
 @main struct KeepyApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @StateObject private var store = AppStore()
+    @StateObject private var updates = UpdateController()
     var body: some Scene {
         Window(AppLogo.name, id: "main") {
             WorkspaceView().environmentObject(store).preferredColorScheme(store.colorScheme)
                 .modifier(WindowSurface(enabled: store.settings.liquidGlass))
-                .onAppear { delegate.attach(store) }
+                .onAppear { delegate.attach(store, updates: updates) }
         }
         .defaultSize(width: 560, height: 620)
         .windowResizability(.contentMinSize)
         .commands {
+            CommandGroup(after: .appInfo) {
+                Button("Check for Updates…") { updates.check() }.disabled(!updates.canCheck)
+            }
             CommandGroup(after: .newItem) {
                 Button("New Entry") { store.addEntry() }.keyboardShortcut("n").disabled(store.vault == nil || store.busy || store.editor != nil)
                 Button("New Group") { store.addGroup() }.keyboardShortcut("n", modifiers: [.command, .shift]).disabled(store.vault == nil || store.busy || store.editor != nil)
@@ -28,7 +32,7 @@ import CoreServices
             }
         }
         Settings {
-            SettingsView().environmentObject(store).preferredColorScheme(store.colorScheme)
+            SettingsView().environmentObject(store).environmentObject(updates).preferredColorScheme(store.colorScheme)
                 .modifier(WindowSurface(enabled: store.settings.liquidGlass))
         }
         MenuBarExtra {
@@ -73,9 +77,10 @@ struct StatusMenu: View {
             NSApp.terminate(nil)
         }
     }
-    func attach(_ store: AppStore) {
+    func attach(_ store: AppStore, updates: UpdateController) {
         guard self.store == nil else { return }
         self.store = store
+        updates.start()
         if !UserDefaults.standard.bool(forKey: "compactWorkspaceLayout") {
             DispatchQueue.main.async {
                 guard let window = NSApp.windows.first(where: { $0.identifier?.rawValue == "main" }) else { return }
@@ -100,6 +105,21 @@ struct StatusMenu: View {
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        if store?.busy == true {
+            let alert = NSAlert()
+            alert.messageText = "Keepy is saving changes"
+            alert.informativeText = "Wait for the current operation to finish, then try again."
+            alert.runModal()
+            return .terminateCancel
+        }
+        if let store, store.hasPendingEdits {
+            let alert = NSAlert()
+            alert.messageText = "Discard unsaved changes and quit?"
+            alert.informativeText = "An editor or unsaved Settings is open. Choose Keep Editing to save your changes before quitting or restarting for an update."
+            alert.addButton(withTitle: "Keep Editing")
+            alert.addButton(withTitle: "Discard and Quit")
+            guard alert.runModal() == .alertSecondButtonReturn else { return .terminateCancel }
+        }
         timer?.invalidate()
         Task { await store?.shutdown(); sender.reply(toApplicationShouldTerminate: true) }
         return .terminateLater

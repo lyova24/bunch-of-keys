@@ -7,6 +7,7 @@ scratch=$(mktemp -d)
 trap 'rm -rf "$scratch"' EXIT
 ssh-keygen -q -t ed25519 -N '' -f "$scratch/test-key"
 xcrun swiftc -swift-version 5 -warnings-as-errors -sdk "$SDKROOT" \
+  -F target/sparkle -framework Sparkle -Xlinker -rpath -Xlinker "$PWD/target/sparkle" \
   -module-cache-path target/swift-module-cache \
   macos/Sources/Keepy/AppLogo.swift \
   macos/Sources/Keepy/Models.swift macos/Sources/Keepy/CoreClient.swift \
@@ -14,6 +15,7 @@ xcrun swiftc -swift-version 5 -warnings-as-errors -sdk "$SDKROOT" \
   macos/Sources/Keepy/VaultOutline.swift macos/Sources/Keepy/Editors.swift \
   macos/Sources/Keepy/SSHKeysEditor.swift macos/Tests/NativeStore.swift \
   macos/Sources/Keepy/WindowSurface.swift \
+  macos/Sources/Keepy/UpdateController.swift macos/Tests/NativeUpdates.swift \
   macos/Tests/NativeOutline.swift macos/Tests/NativeWindowSurface.swift \
   macos/Tests/NativeTagFilter.swift \
   macos/Tests/Integration.swift -o "$scratch/integration"

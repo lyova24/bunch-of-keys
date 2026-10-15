@@ -43,3 +43,9 @@ jobs:
       - name: Test Swift client against the bundled service
         if: matrix.arch == 'arm64'
         run: bash scripts/test-native.sh
+      - name: Smoke-test the signed bundle launch
+        if: matrix.arch == 'arm64'
+        run: python3 scripts/test-bundle-launch.py target/macos/arm64/Keepy.app
+      - name: Verify update signatures and reject corrupt archives
+        if: matrix.arch == 'arm64'
+        run: bash scripts/test-updates.sh

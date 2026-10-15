@@ -1,0 +1,86 @@
+name: Publish signed macOS update
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag to publish (vX.Y.Z)
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+jobs:
+  package:
+    runs-on: macos-26
+    strategy:
+      matrix:
+        include:
+          - arch: arm64
+            target: aarch64-apple-darwin
+          - arch: x86_64
+            target: x86_64-apple-darwin
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+      - name: Verify tag matches package version
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          bash scripts/check-version-sync.sh
+          test "$RELEASE_TAG" = "v$(/usr/libexec/PlistBuddy -c 'Print CFBundleVersion' macos/Info.plist)"
+      - name: Build application and recovery DMG
+        env:
+          KEEPY_ARCH: ${{ matrix.arch }}
+        run: bash scripts/build-macos.sh --dmg
+      - name: Sign update archives and feeds
+        env:
+          KEEPY_ARCH: ${{ matrix.arch }}
+          KEEPY_UPDATE_PRIVATE_KEY: ${{ secrets.KEEPY_UPDATE_PRIVATE_KEY }}
+        run: |
+          test -n "$KEEPY_UPDATE_PRIVATE_KEY" || { echo 'Set the KEEPY_UPDATE_PRIVATE_KEY repository secret'; exit 1; }
+          umask 077
+          key_file=$(mktemp)
+          trap 'rm -f "$key_file"' EXIT
+          printf '%s' "$KEEPY_UPDATE_PRIVATE_KEY" > "$key_file"
+          KEEPY_UPDATE_KEY_FILE="$key_file" bash scripts/package-update.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: update-${{ matrix.arch }}
+          path: dist/*
+          if-no-files-found: error
+  publish:
+    needs: package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: update-*
+          merge-multiple: true
+          path: dist
+      - name: Publish both architectures together
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          python3 - "$RELEASE_TAG" <<'PY'
+          import pathlib, sys
+          version = sys.argv[1].removeprefix('v')
+          notes = pathlib.Path('CHANGELOG.md').read_text().split(f'## {version} - ', 1)[1].split('\n', 1)[1].split('\n## ', 1)[0]
+          pathlib.Path('release-notes.md').write_text(notes.strip() + '\n')
+          PY
+          gh release create "$RELEASE_TAG" dist/* --verify-tag --title "Keepy $RELEASE_TAG" --notes-file release-notes.md --draft
+          gh release edit "$RELEASE_TAG" --draft=false --latest

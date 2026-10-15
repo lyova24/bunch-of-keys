@@ -22,6 +22,8 @@ items:
         href: index.md
       - name: Install on macOS
         href: INSTALL_MACOS.md
+      - name: In-app updates
+        href: UPDATES.md
       - name: User guide
         href: USER_GUIDE.md
       - name: SSH private keys

@@ -59,7 +59,7 @@ appearance and Liquid Glass using synthetic data before shipping UI changes.
 bash scripts/build-macos.sh --dmg
 ```
 
-The result is `dist/Keepy_2.1.1_<arch>.dmg` plus its SHA-256 checksum.
+The result is `dist/Keepy_2.2.0_<arch>.dmg` plus its SHA-256 checksum.
 Set KEEPY_ARCH=arm64 or KEEPY_ARCH=x86_64 to cross-build another architecture after
 installing the matching Rust target with rustup. The script signs locally with
 an ad-hoc identity by default. Set KEEPY_SIGN_IDENTITY to a Developer ID identity
@@ -70,8 +70,9 @@ The manual GitHub package workflow accepts a branch/tag/commit and builds both
 architectures on macOS 26. CI also checks both native bundles, Rust and Swift.
 The Intel bundle is cross-compiled on Apple Silicon; interactive runtime checks
 on Intel hardware remain part of release verification. Security checks run on
-macOS and use cargo-deny and cargo-audit. No workflow publishes releases,
-creates tags, or closes GitHub issues automatically.
+macOS and use cargo-deny and cargo-audit. The version-tag release workflow
+publishes signed updates and recovery DMGs; see [In-app updates](UPDATES.md)
+for signing setup and publishing. No workflow closes GitHub issues automatically.
 
 Version synchronization covers Cargo.toml, the root Cargo.lock package,
 macos/Info.plist (both bundle versions), and the latest changelog entry.

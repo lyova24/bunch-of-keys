@@ -31,6 +31,11 @@ struct EditorRoute: Identifiable {
     @Published var notice: String?
     @Published var editor: EditorRoute?
     @Published var showingKeys = false
+    @Published var settingsHaveChanges = false
+    var hasPendingEdits: Bool {
+        UpdatePolicy.blocksRestart(busy: busy, editor: editor != nil, keys: showingKeys,
+                                  prompt: sshPrompt != nil, settings: settingsHaveChanges)
+    }
     @Published var deleteTarget: VaultNode?
     @Published var sshPrompt: (entry: String, field: String)?
     let core: CoreClient

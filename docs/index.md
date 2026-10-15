@@ -12,6 +12,7 @@ connections through an in-memory agent.
   install or update the application. Requires macOS 14 or later.
 - [Use your vault](USER_GUIDE.md): create a vault, organize entries, search and
   filter by tags, and manage locking and appearance.
+- [Update Keepy](UPDATES.md): check for updates, install and restart in the app.
 - [Connect with SSH](SSH_KEYS_V2.md): keep reusable keys inside your encrypted
   vault and connect through the system OpenSSH client.
 

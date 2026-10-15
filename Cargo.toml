@@ -1,6 +1,6 @@
 [package]
 name = "keepy"
-version = "2.1.1"
+version = "2.2.0"
 description = "Keepy, a native macOS encrypted credential manager"
 authors = ["Keepy contributors"]
 edition = "2024"

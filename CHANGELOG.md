@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.2.0 - 2026-10-15
+
+- Add authenticated in-app updates with Sparkle, manual menu checks, automatic
+  check preferences, release notes, download progress and recoverable errors (#43).
+- Protect open editors and unsaved Settings before quitting or updating, and
+  lock the vault and stop the service before restart.
+- Publish signed architecture-specific update archives and feeds alongside
+  recovery DMGs; require Ed25519 authentication even for ad-hoc builds.
+
 ## 2.1.1 - 2026-10-14
 
 - Add a reproducible Diplodoc documentation site with navigation, local search,

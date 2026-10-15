@@ -1,6 +1,6 @@
 # Installing on macOS
 
-Version 2.1.1 supports macOS 14 Sonoma or later. Liquid Glass requires macOS 26.
+Version 2.2.0 supports macOS 14 Sonoma or later. Liquid Glass requires macOS 26.
 Choose arm64 for Apple Silicon (M-series) or x86_64 for Intel (Apple menu →
 About This Mac). Download the matching DMG and SHA-256 file from the package
 workflow artifacts or a release, when available.
@@ -10,7 +10,7 @@ workflow artifacts or a release, when available.
 In the directory containing both downloaded files:
 
 ```sh
-shasum -a 256 -c Keepy_2.1.1_arm64.dmg.sha256
+shasum -a 256 -c Keepy_2.2.0_arm64.dmg.sha256
 ```
 
 Substitute x86_64 for an Intel download. The checksum detects download errors;
@@ -23,6 +23,10 @@ Open Anyway after attempting to open it. Only do this for a build you trust.
 Do not disable Gatekeeper system-wide.
 
 ## Upgrade
+
+Starting with 2.2, choose **Keepy → Check for Updates…** to download and install
+updates inside the app. Settings controls automatic checks; installation always
+requires your approval. See [In-app updates](UPDATES.md) for details and recovery.
 
 Quit the previous application and back up your data before replacing the app.
 Install Keepy.app into Applications. On first launch, earlier data and backup
