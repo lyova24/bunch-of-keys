@@ -24,7 +24,7 @@ jobs:
           - arch: x86_64
             target: x86_64-apple-darwin
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.tag || github.ref_name }}
       - uses: dtolnay/rust-toolchain@stable
@@ -52,7 +52,7 @@ jobs:
           trap 'rm -f "$key_file"' EXIT
           printf '%s' "$KEEPY_UPDATE_PRIVATE_KEY" > "$key_file"
           KEEPY_UPDATE_KEY_FILE="$key_file" bash scripts/package-update.sh
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: update-${{ matrix.arch }}
           path: dist/*
@@ -63,10 +63,10 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.tag || github.ref_name }}
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: update-*
           merge-multiple: true
