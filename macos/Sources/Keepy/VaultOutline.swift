@@ -183,6 +183,7 @@ struct VaultOutline: NSViewRepresentable {
         var tagExpanded = Set<String>()
         var updating = false
         var didFocus = false
+        var handledEntryNavigation: UUID?
         private var focusScheduled = false
         var contextItem: OutlineNode?
         init(_ store: AppStore) { self.store = store }
@@ -288,6 +289,20 @@ struct VaultOutline: NSViewRepresentable {
                     let row = outline.row(forItem: item)
                     if row >= 0 { outline.scrollRowToVisible(row) }
                 }
+            }
+            if let request = store.entryNavigation, request.token != handledEntryNavigation,
+               let item = boxes[request.entryID] {
+                var ancestors: [String] = []
+                var parent = store.vault?.parent(of: request.entryID)
+                while let id = parent { ancestors.append(id); parent = store.vault?.parent(of: id) }
+                for id in ancestors.reversed() {
+                    expanded.insert(id)
+                    if let ancestor = boxes[id] { outline.expandItem(ancestor) }
+                }
+                expanded.insert(item.id); outline.expandItem(item)
+                handledEntryNavigation = request.token
+                let row = outline.row(forItem: item)
+                if row >= 0 { outline.scrollRowToVisible(row) }
             }
             var fieldRows = IndexSet()
             for row in 0..<outline.numberOfRows where (outline.item(atRow: row) as? OutlineNode)?.field != nil { fieldRows.insert(row) }

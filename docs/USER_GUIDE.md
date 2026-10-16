@@ -133,6 +133,24 @@ File → Import YAML (Shift-Command-I) opens the native file picker and imports
 nested groups and entries into the unlocked vault. The importer identifies
 password-like values and URLs automatically. Existing contents are retained.
 
+## Tagged credentials in the menu bar
+
+Unlock a vault and choose **Vault → Tray Tags…**, or **Tray Tags…** in the menu
+bar menu. Each color has its own **Show in tray** switch; all start disabled.
+Save your selection to this vault. The settings are encrypted with the vault,
+persist after restart, and are independent of the current search/tag filter.
+
+The menu bar lists entries matching any enabled color, including every entry
+inside a group with that color. An entry matching several colors appears once.
+Group paths distinguish entries with the same name. Selecting an entry opens
+Keepy, clears temporary filters, expands its ancestors and selects the entry.
+Finish open editors and unsaved Settings before selecting another credential.
+
+The list updates when tags or their tray settings change. It explains when no
+colors are enabled or no credentials match. Locking removes all credential names
+from the menu; unlock before using quick access again. There is no separate
+favorite flag or favorites list.
+
 ## Rename a vault or change its password
 
 Unlock the vault, finish or cancel any open editor, then open the **Vault** menu

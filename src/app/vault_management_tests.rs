@@ -91,6 +91,7 @@ fn populate_vault(state: &AppState) {
         .unwrap();
     state
         .mutate(|data| {
+            data.set_tray_tags(vec![TagColor::Blue])?;
             let key = data.add_ssh_key("Test SSH key", &private)?;
             let group = data.add_group_with_tags(None, "Tagged group", vec![TagColor::Blue])?;
             let nested = data.add_group(Some(group), "Nested")?;

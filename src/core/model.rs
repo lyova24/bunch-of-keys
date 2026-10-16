@@ -14,6 +14,8 @@ const CURRENT_SCHEMA_VERSION: u16 = 2;
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct VaultData {
     pub schema_version: u16,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tray_tags: Vec<TagColor>,
     #[serde(default)]
     pub ssh_keys: Vec<SshKey>,
     pub nodes: Vec<Node>,
@@ -23,6 +25,7 @@ impl Default for VaultData {
     fn default() -> Self {
         Self {
             schema_version: CURRENT_SCHEMA_VERSION,
+            tray_tags: Vec::new(),
             ssh_keys: Vec::new(),
             nodes: Vec::new(),
         }
@@ -195,7 +198,7 @@ pub enum ModelError {
     PositionOutOfBounds,
     #[error("field identifiers must be unique inside an entry")]
     DuplicateFieldId,
-    #[error("tag colors must be unique on a node")]
+    #[error("tag colors must be unique")]
     DuplicateTagColor,
     #[error("vault schema version is not supported")]
     UnsupportedSchema,
@@ -224,6 +227,11 @@ pub enum ModelError {
 }
 
 impl VaultData {
+    pub fn set_tray_tags(&mut self, tags: Vec<TagColor>) -> Result<(), ModelError> {
+        validate_tags(&tags)?;
+        self.tray_tags = tags;
+        Ok(())
+    }
     pub fn add_group(&mut self, parent_id: Option<Uuid>, name: &str) -> Result<Uuid, ModelError> {
         self.add_group_with_tags(parent_id, name, Vec::new())
     }
@@ -486,6 +494,7 @@ impl VaultData {
     }
 
     pub fn validate(&self) -> Result<(), ModelError> {
+        validate_tags(&self.tray_tags)?;
         if !(1..=CURRENT_SCHEMA_VERSION).contains(&self.schema_version) {
             return Err(ModelError::UnsupportedSchema);
         }
@@ -1421,5 +1430,21 @@ mod tests {
             Err(ModelError::PositionOutOfBounds)
         );
         assert_eq!(vault, original);
+    }
+    #[test]
+    fn tray_preferences_are_optional_and_validate_before_mutation() {
+        let mut data: VaultData =
+            serde_json::from_str(r#"{"schema_version":2,"nodes":[]}"#).unwrap();
+        assert_eq!(data.tray_tags, []);
+        data.set_tray_tags(vec![TagColor::Red, TagColor::Blue])
+            .unwrap();
+        let expected = data.clone();
+        assert!(
+            data.set_tray_tags(vec![TagColor::Green, TagColor::Green])
+                .is_err()
+        );
+        assert_eq!(data, expected);
+        data.tray_tags = vec![TagColor::Red, TagColor::Red];
+        assert!(data.validate().is_err());
     }
 }

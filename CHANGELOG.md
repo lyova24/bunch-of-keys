@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.2.6 - 2026-10-16
+
+- Add per-vault Show in tray preferences for each colored tag, disabled by
+  default and stored in the encrypted payload (#13).
+- Show matching credentials once in the menu bar, including descendants of
+  tagged groups; selecting one reveals it in the main tree.
+- Update the list as tags change, protect unsaved editors, and remove credential
+  names immediately when locking. Add coherent empty and unconfigured states.
+
 ## 2.2.5 - 2026-10-16
 
 - Treat search and tag-filter expansion as temporary and restore the original

@@ -147,6 +147,7 @@ struct WorkspaceView: View {
             Divider()
             Button("Rename Vault…") { store.manageVault(password: false) }.disabled(!store.canManageVault)
             Button("Change Master Password…") { store.manageVault(password: true) }.disabled(!store.canManageVault)
+            Button("Tray Tags…") { store.manageTrayTags() }.disabled(!store.canManageVault)
             Button("SSH Keys…") { store.showingKeys = true }
             Button("Touch ID…") { store.manageTouchID() }.disabled(!store.canManageTouchID).help(store.touchIDHelp)
         }

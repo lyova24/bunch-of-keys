@@ -440,11 +440,36 @@ impl AppState {
     where
         F: FnOnce(&mut VaultData) -> Result<(), AppError>,
     {
+        self.mutate_current(None, operation)
+    }
+
+    pub fn set_tray_tags(
+        &self,
+        vault_id: Uuid,
+        tags: Vec<crate::core::TagColor>,
+    ) -> Result<VaultView, AppError> {
+        self.mutate_current(Some(vault_id), |data| {
+            data.set_tray_tags(tags)?;
+            Ok(())
+        })
+    }
+
+    fn mutate_current<F>(
+        &self,
+        expected_vault: Option<Uuid>,
+        operation: F,
+    ) -> Result<VaultView, AppError>
+    where
+        F: FnOnce(&mut VaultData) -> Result<(), AppError>,
+    {
         let mut session_guard = self
             .session
             .lock()
             .map_err(|_| AppError::StateUnavailable)?;
-        let session = session_guard.as_mut().ok_or(AppError::Locked)?;
+        let session = session_guard
+            .as_mut()
+            .filter(|session| expected_vault.is_none_or(|id| id == session.record.id))
+            .ok_or(AppError::Locked)?;
         let mut next_data = session.vault.data().clone();
         operation(&mut next_data)?;
         let next_envelope = session.vault.prepare_update(&next_data)?;

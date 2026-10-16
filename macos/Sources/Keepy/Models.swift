@@ -42,6 +42,18 @@ struct Vault: Decodable, Equatable {
     var id: String
     var sshKeys: [SSHKey]
     var nodes: [VaultNode]
+    var trayTags: [TagColor]
+    init(id: String, sshKeys: [SSHKey], nodes: [VaultNode], trayTags: [TagColor] = []) {
+        self.id = id; self.sshKeys = sshKeys; self.nodes = nodes; self.trayTags = trayTags
+    }
+    private enum CodingKeys: String, CodingKey { case id, sshKeys, nodes, trayTags }
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        id = try values.decode(String.self, forKey: .id)
+        sshKeys = try values.decode([SSHKey].self, forKey: .sshKeys)
+        nodes = try values.decode([VaultNode].self, forKey: .nodes)
+        trayTags = try values.decodeIfPresent([TagColor].self, forKey: .trayTags) ?? []
+    }
     func node(_ id: String?) -> VaultNode? {
         guard let id else { return nil }
         return nodes.lazy.compactMap { $0.find(id) }.first

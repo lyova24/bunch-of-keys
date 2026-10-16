@@ -14,6 +14,7 @@ struct EditorView: View {
         case .createVault: NewVaultEditor()
         case .renameVault(let vault): RenameVaultEditor(vault: vault)
         case .changeMasterPassword(let id): ChangeMasterPasswordEditor(vaultID: id)
+        case .trayTags(let id): TrayTagsEditor(vaultID: id)
         }
     }
 }

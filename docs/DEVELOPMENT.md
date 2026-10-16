@@ -49,7 +49,9 @@ masking, copying, URLs, field reordering, tree moves, colored tag mutations,
 legacy decoding and filtering, YAML import, SSH key references, preferences,
 vault renaming and master password changes, and persistence after a full process
 restart. Vault management tests also cover failed writes, old-password rejection,
-Touch ID invalidation and late responses after locking. Native store tests verify tag
+Touch ID invalidation and late responses after locking. Tray tests cover encrypted
+per-vault preferences, inherited tags, deduplication, menu actions, tree reveal,
+editor guards, live menu refresh and empty/locked states. Native store tests verify tag
 filter cleanup, clipboard ownership, clearing on lock, and protection from
 late reveal responses on a private test pasteboard.
 Visually verify native windows, editing, drag-and-drop, lock/unlock, Settings,

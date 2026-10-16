@@ -87,6 +87,10 @@ enum Command {
         node_id: Uuid,
         tags: Vec<TagColor>,
     },
+    SetTrayTags {
+        tags: Vec<TagColor>,
+        vault_id: Uuid,
+    },
     DeleteNode {
         node_id: Uuid,
     },
@@ -209,6 +213,11 @@ fn execute(state: &Arc<AppState>, command: Command) -> Result<Value, String> {
             state.save_settings(settings).map_err(|e| e.to_string())?;
             Ok(Value::Null)
         }
+        Command::SetTrayTags { vault_id, tags } => serde_json::to_value(
+            state
+                .set_tray_tags(vault_id, tags)
+                .map_err(|e| e.to_string())?,
+        ),
         command => return execute_mutation(state, command),
     };
     result.map_err(|e| e.to_string())
@@ -543,7 +552,7 @@ mod tests {
     }
 
     struct TaggedFixture {
-        _directory: tempfile::TempDir,
+        directory: tempfile::TempDir,
         state: Arc<AppState>,
         vault_id: Value,
         group_id: Value,
@@ -583,7 +592,7 @@ mod tests {
         let entry_id = entry["nodes"][0]["children"][0]["id"].clone();
         let field_id = entry["nodes"][0]["children"][0]["fields"][0]["id"].clone();
         TaggedFixture {
-            _directory: directory,
+            directory,
             state,
             vault_id,
             group_id,
@@ -595,7 +604,7 @@ mod tests {
     #[test]
     fn tag_protocol_preserves_legacy_edits_rejects_duplicates_and_persists_updates() {
         let TaggedFixture {
-            _directory,
+            directory: _directory,
             state,
             vault_id,
             group_id,
@@ -625,10 +634,7 @@ mod tests {
                 "tags": ["yellow", "yellow"]
             }),
         );
-        assert_eq!(
-            duplicate.unwrap_err(),
-            "tag colors must be unique on a node"
-        );
+        assert_eq!(duplicate.unwrap_err(), "tag colors must be unique");
         assert_eq!(
             serde_json::to_value(state.bootstrap().unwrap().current.unwrap()).unwrap(),
             before
@@ -713,5 +719,56 @@ mod tests {
         assert!(responses[0]["result"]["id"].is_string());
         assert_eq!(responses[2]["error"], "a vault must be unlocked first");
         assert!(state.bootstrap().unwrap().current.is_none());
+    }
+    #[test]
+    fn tray_tags_are_vault_bound_validated_encrypted_and_persisted() {
+        let fixture = tagged_fixture();
+        let state = &fixture.state;
+        let view = run_command(
+            state,
+            json!({"command":"set_tray_tags", "vault_id":fixture.vault_id, "tags":["blue", "red"]}),
+        )
+        .unwrap();
+        assert_eq!(view["tray_tags"], json!(["blue", "red"]));
+        assert!(run_command(state, json!({"command":"set_tray_tags", "vault_id":fixture.vault_id, "tags":["red", "red"]})).is_err());
+        assert_eq!(
+            run_command(state, json!({"command":"bootstrap"})).unwrap()["current"],
+            view
+        );
+        assert!(
+            serde_json::from_value::<Command>(
+                json!({"command":"set_tray_tags", "vault_id":fixture.vault_id, "tags":["unknown"]})
+            )
+            .is_err()
+        );
+        let other = run_command(state, json!({"command":"create_vault", "name":"Other tray vault", "password":"other-password"})).unwrap();
+        assert_eq!(other["tray_tags"], json!([]));
+        assert!(
+            run_command(
+                state,
+                json!({"command":"set_tray_tags", "vault_id":fixture.vault_id, "tags":["green"]})
+            )
+            .is_err()
+        );
+        assert_eq!(run_command(state, json!({"command":"unlock_vault", "vault_id":fixture.vault_id, "password":"password123"})).unwrap(), view);
+        run_command(state, json!({"command":"lock_vault"})).unwrap();
+        let locked = run_command(state, json!({"command":"bootstrap"})).unwrap();
+        assert!(locked["current"].is_null());
+        assert!(
+            run_command(
+                state,
+                json!({"command":"set_tray_tags", "vault_id":fixture.vault_id, "tags":[]})
+            )
+            .is_err()
+        );
+        let storage = AppStorage::new(fixture.directory.path(), fixture.directory.path()).unwrap();
+        let config = storage.load_config().unwrap();
+        assert!(
+            !serde_json::to_string(&config)
+                .unwrap()
+                .contains("tray_tags")
+        );
+        let restarted = Arc::new(AppState::new(storage, config));
+        assert_eq!(run_command(&restarted, json!({"command":"unlock_vault", "vault_id":fixture.vault_id, "password":"password123"})).unwrap(), view);
     }
 }

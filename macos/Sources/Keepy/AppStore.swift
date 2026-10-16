@@ -4,7 +4,7 @@ import ServiceManagement
 import UniformTypeIdentifiers
 
 struct EditorRoute: Identifiable {
-    enum Kind { case entry(VaultNode?), group(VaultNode?), keys, createVault, renameVault(VaultSummary), changeMasterPassword(String) }
+    enum Kind { case entry(VaultNode?), group(VaultNode?), keys, createVault, renameVault(VaultSummary), changeMasterPassword(String), trayTags(String) }
     var id = UUID()
     var kind: Kind
     var parentId: String?
@@ -27,6 +27,7 @@ struct EditorRoute: Identifiable {
         }
     }
     @Published var selection: String?
+    @Published var entryNavigation: EntryNavigationRequest?
     @Published var search = ""
     @Published var tagFilter = Set<TagColor>()
     @Published var revealed: [String: String] = [:]
@@ -120,7 +121,7 @@ struct EditorRoute: Identifiable {
     }
     func clearSession() {
         biometricKeychain.cancel(); showingTouchIDSetup = false
-        vault = nil; selection = nil; clearFilters(); revealed.removeAll(); activeSSH.removeAll()
+        vault = nil; selection = nil; entryNavigation = nil; clearFilters(); revealed.removeAll(); activeSSH.removeAll()
         editor = nil; showingKeys = false; sshPrompt = nil; deleteTarget = nil; notice = nil
         clearClipboard()
     }
@@ -172,7 +173,10 @@ struct EditorRoute: Identifiable {
             vault = result; revealed.removeAll()
             if let selection, result.node(selection) == nil { self.selection = nil }
             return true
-        } catch { fail(error); return false }
+        } catch {
+            guard generation == epoch else { return false }
+            fail(error); return false
+        }
     }
     func addEntry() { guard vault != nil, !busy, editor == nil else { return }; clearFilters(); editor = EditorRoute(kind: .entry(nil), parentId: destination) }
     func addGroup() { guard vault != nil, !busy, editor == nil else { return }; clearFilters(); editor = EditorRoute(kind: .group(nil), parentId: destination) }

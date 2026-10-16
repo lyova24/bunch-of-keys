@@ -9,7 +9,16 @@ import SwiftUI
     let menu = NSMenu()
     private weak var store: AppStore?
     private weak var shortcuts: TrayShortcutSettings?
-    private var observation: AnyCancellable?
+    private var observations = Set<AnyCancellable>()
+    private struct MenuState: Equatable {
+        var vaultID: String?
+        var name: String
+        var entries: [TrayEntry]
+        var configured: Bool
+        var canOpen: Bool
+        var canManage: Bool
+    }
+    private var state: MenuState?
     private var openWindow: (() -> Void)?
     private var openSettings: (() -> Void)?
     private var tracking = false
@@ -21,14 +30,23 @@ import SwiftUI
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         item.autosaveName = "KeepyMenuBar"
         item.menu = menu; statusItem = item
-        observation = store.$vault.sink { [weak self] vault in
+        store.$vault.sink { [weak self] vault in
             guard let self else { return }
             self.updateIcon(locked: vault == nil)
-            if self.tracking, self.menu.items.count > 2 {
-                self.menu.items[0].title = vault == nil ? "Vault locked" : store.vaults.first(where: { $0.id == vault?.id })?.name ?? "Vault"
-                self.menu.items[2].isEnabled = vault != nil
+            if vault == nil {
+                if self.tracking { self.menu.cancelTracking() }
+                self.render(nil)
             }
-        }
+        }.store(in: &observations)
+        store.objectWillChange.sink { [weak self] _ in
+            // Published values are committed after objectWillChange. Read the
+            // latest state on the next main turn and skip unchanged menus so
+            // background refresh cannot disrupt keyboard navigation.
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.render(self.store?.vault)
+            }
+        }.store(in: &observations)
         shortcuts.start { [weak self] in self?.showMenu() }
     }
     private func updateIcon(locked: Bool) {
@@ -50,18 +68,47 @@ import SwiftUI
         guard !tracking else { return }
         statusItem?.button?.performClick(nil)
     }
-    func menuNeedsUpdate(_ menu: NSMenu) {
+    func menuNeedsUpdate(_ menu: NSMenu) { render(store?.vault, force: true) }
+    private func render(_ vault: Vault?, force: Bool = false) {
         guard let store else { return }
+        let next = MenuState(vaultID: vault?.id,
+            name: vault == nil ? "Vault locked" : store.vaults.first(where: { $0.id == vault?.id })?.name ?? "Vault",
+            entries: vault?.trayEntries ?? [], configured: vault?.trayTags.isEmpty == false,
+            canOpen: store.canOpenTrayEntries, canManage: store.canManageVault)
+        guard force || state != next else { return }
+        state = next
         menu.removeAllItems()
-        let header = NSMenuItem(title: store.vault == nil ? "Vault locked" : store.vaultName, action: nil, keyEquivalent: "")
-        header.isEnabled = false; menu.addItem(header)
+        add(next.name, enabled: false)
         add("Open Keepy", action: #selector(showWorkspace))
-        add("Lock Vault", action: #selector(lock), enabled: store.vault != nil)
+        add("Lock Vault", action: #selector(lock), enabled: vault != nil)
         menu.addItem(.separator())
+        if vault != nil {
+            add("Tagged Credentials", enabled: false)
+            if next.entries.isEmpty {
+                add(next.configured ? "No credentials match the selected tags." : "Choose tags to show credentials here.", enabled: false)
+            }
+            for entry in next.entries {
+                let item = NSMenuItem(title: entry.title, action: #selector(openEntry(_:)), keyEquivalent: "")
+                item.target = self; item.representedObject = entry.id; item.isEnabled = next.canOpen
+                item.toolTip = entry.path.isEmpty ? entry.name : "\(entry.path) › \(entry.name)"
+                item.image = NSImage(systemSymbolName: "key.horizontal", accessibilityDescription: nil)
+                menu.addItem(item)
+            }
+            add("Tray Tags…", action: #selector(configureTrayTags), enabled: next.canManage)
+            menu.addItem(.separator())
+        }
         add("Settings…", action: #selector(showSettings))
         add("Quit Keepy", action: #selector(quit), key: "q")
     }
-    private func add(_ title: String, action: Selector, key: String = "", enabled: Bool = true) {
+    @objc private func openEntry(_ sender: NSMenuItem) {
+        guard let id = sender.representedObject as? String, store?.selectTrayEntry(id) == true else { return }
+        showWorkspace()
+    }
+    @objc private func configureTrayTags() {
+        guard store?.canManageVault == true else { return }
+        showWorkspace(); store?.manageTrayTags()
+    }
+    private func add(_ title: String, action: Selector? = nil, key: String = "", enabled: Bool = true) {
         let item = NSMenuItem(title: title, action: action, keyEquivalent: key)
         item.target = self; item.isEnabled = enabled; menu.addItem(item)
     }
@@ -76,7 +123,7 @@ import SwiftUI
     }
     @objc private func quit() { NSApp.terminate(nil) }
     func stop() {
-        shortcuts?.stop(); observation = nil
+        shortcuts?.stop(); observations.removeAll(); state = nil
         menu.cancelTracking()
         if let statusItem { NSStatusBar.system.removeStatusItem(statusItem) }
         statusItem = nil

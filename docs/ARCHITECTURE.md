@@ -123,3 +123,11 @@ current password, prepare fresh Argon2id salt and XChaCha20-Poly1305 wrapping
 nonce for the same vault key, and preserve the encrypted payload. The atomic
 vault write precedes locking and SSH cleanup. Old biometric bindings no longer
 match; native password forms clear when dismissed or the session changes.
+
+Per-vault `tray_tags` is an optional array in the encrypted payload (empty for
+older vaults); public vault summaries and the plaintext registry do not contain
+it. The native menu derives a deduplicated entry list using inherited group tags.
+Only changed menu snapshots are rendered, preserving keyboard navigation during
+background refresh. Locking cancels tracking and removes credential menu items.
+Tray navigation carries a fresh token so the outline reveals and selects the
+requested entry once without reopening it on later refreshes.
