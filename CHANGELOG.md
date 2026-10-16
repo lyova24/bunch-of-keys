@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.2.5 - 2026-10-16
+
+- Treat search and tag-filter expansion as temporary and restore the original
+  group and entry expansion after clearing filters (#42).
+- Recompute expansion when the query changes even if results stay identical;
+  keep tag-filter ancestors visible without retaining search-opened entries.
+
 ## 2.2.4 - 2026-10-16
 
 - Add vault renaming and password changes from the Vault menu, with shared name

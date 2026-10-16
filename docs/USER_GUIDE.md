@@ -86,6 +86,11 @@ Combine tag filtering with text search to narrow those results: a displayed item
 also match the search, or contain a descendant that does. Search still excludes
 masked values; a group-name search keeps the matching subtree. Clear filters
 from the filter popover or active-filter strip to show the full tree again.
+Search expands matching groups and entries temporarily. Clearing the search
+restores the expansion you had before filtering; repeated queries do not change
+that saved state. If a tag filter is still active, its ancestor groups stay open,
+while entries opened only by search collapse. Manual expansion changes made
+while filtering are temporary too.
 Locking or switching vaults clears both search and selected filter colors.
 
 ![Search for demo combined with the Green tag filter, showing the matching server and ancestor groups](images/tag-filter.png)

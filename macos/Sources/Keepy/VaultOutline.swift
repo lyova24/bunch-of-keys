@@ -175,10 +175,12 @@ struct VaultOutline: NSViewRepresentable {
         var roots: [OutlineNode] = []
         var boxes: [String: OutlineNode] = [:]
         var previous: [VaultNode] = []
-        var previouslyFiltering = false
+        var previousSearch = ""
+        var previousTags = Set<TagColor>()
         var editorSignature = ""
         var editorHost: NSHostingView<InlineEditor>?
         var expanded = Set<String>()
+        var tagExpanded = Set<String>()
         var updating = false
         var didFocus = false
         private var focusScheduled = false
@@ -217,9 +219,10 @@ struct VaultOutline: NSViewRepresentable {
             let signature = route.map { "\($0.id):\($0.parentId ?? "root"):\($0.insertionIndex ?? -1)" } ?? ""
             updating = true; defer { updating = false }
             let selectedItem = outline.item(atRow: outline.selectedRow) as? OutlineNode
-            if previous != nodes || signature != editorSignature || previouslyFiltering != store.isFiltering {
+            if previous != nodes || signature != editorSignature || previousSearch != store.search || previousTags != store.tagFilter {
+                if previousTags.isEmpty && !store.tagFilter.isEmpty { tagExpanded = expanded }
                 let oldRoute = editorHost?.rootView.routeId
-                previous = nodes; editorSignature = signature; previouslyFiltering = store.isFiltering
+                previous = nodes; editorSignature = signature; previousSearch = store.search; previousTags = store.tagFilter
                 var next: [String: OutlineNode] = [:]
                 func box(_ id: String) -> OutlineNode {
                     let item = boxes[id] ?? OutlineNode(id)
@@ -271,9 +274,12 @@ struct VaultOutline: NSViewRepresentable {
                 } else { editorHost = nil }
                 boxes = next
                 outline.reloadData()
-                // Expanding ancestors first also restores nested entries after a reload.
+                // AppKit retains expansion for reused item objects. Reset its
+                // temporary presentation before restoring normal browsing state.
+                outline.collapseItem(nil, collapseChildren: true)
+                let saved = store.tagFilter.isEmpty ? expanded : tagExpanded
                 func restore(_ items: [OutlineNode]) {
-                    for item in items where expanded.contains(item.id) || !store.search.isEmpty || (store.isFiltering && item.node?.isGroup == true) {
+                    for item in items where saved.contains(item.id) || !store.search.isEmpty || (!store.tagFilter.isEmpty && item.node?.isGroup == true) {
                         outline.expandItem(item); restore(item.children)
                     }
                 }
@@ -388,10 +394,27 @@ struct VaultOutline: NSViewRepresentable {
             store.selection = item?.node?.id ?? item?.entryId ?? item?.route?.parentId; store.touch()
         }
         func outlineViewItemDidExpand(_ notification: Notification) {
-            if let item = notification.userInfo?["NSObject"] as? OutlineNode { expanded.insert(item.id) }
+            guard !updating, store.search.isEmpty,
+                  let item = notification.userInfo?["NSObject"] as? OutlineNode else { return }
+            if store.tagFilter.isEmpty { expanded.insert(item.id) }
+            else { tagExpanded.insert(item.id) }
+            // Descendant objects can disappear from a filtered datasource.
+            // Restore their saved state when a user reopens the parent.
+            let saved = store.tagFilter.isEmpty ? expanded : tagExpanded
+            updating = true; defer { updating = false }
+            func restore(_ children: [OutlineNode]) {
+                for child in children where saved.contains(child.id) {
+                    outline?.expandItem(child); restore(child.children)
+                }
+            }
+            restore(item.children)
         }
         func outlineViewItemDidCollapse(_ notification: Notification) {
-            if let item = notification.userInfo?["NSObject"] as? OutlineNode { expanded.remove(item.id) }
+            guard !updating, store.search.isEmpty else { return }
+            if let item = notification.userInfo?["NSObject"] as? OutlineNode {
+                if store.tagFilter.isEmpty { expanded.remove(item.id) }
+                else { tagExpanded.remove(item.id) }
+            }
         }
         @objc func doubleClick() { activate(edit: true) }
         func activate(edit: Bool = false) {

@@ -19,7 +19,7 @@ xcrun swiftc -swift-version 5 -warnings-as-errors -sdk "$SDKROOT" \
   macos/Sources/Keepy/WindowSurface.swift \
   macos/Sources/Keepy/UpdateController.swift macos/Tests/NativeUpdates.swift \
   macos/Tests/NativeOutline.swift macos/Tests/NativeWindowSurface.swift \
-  macos/Tests/NativeOutlineKeyboard.swift \
+  macos/Tests/NativeOutlineKeyboard.swift macos/Tests/NativeSearchExpansion.swift \
   macos/Tests/NativeTagFilter.swift \
   macos/Sources/Keepy/TrayShortcut.swift macos/Sources/Keepy/TrayMenu.swift \
   macos/Tests/NativeTrayShortcut.swift macos/Tests/NativeVaultManagement.swift \

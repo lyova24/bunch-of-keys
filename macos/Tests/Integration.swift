@@ -4,6 +4,7 @@ import Foundation
     static func main() async throws {
         NativeUpdates.run()
         try await NativeOutlineKeyboard.run()
+        NativeSearchExpansion.run()
         try verifyTagFiltering()
         let executable = URL(fileURLWithPath: CommandLine.arguments[1])
         try await NativeTrayShortcut.run(executable: executable)
