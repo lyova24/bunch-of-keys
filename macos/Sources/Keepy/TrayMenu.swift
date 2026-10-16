@@ -13,7 +13,7 @@ import SwiftUI
     private struct MenuState: Equatable {
         var vaultID: String?
         var name: String
-        var credentials: [TrayCredential]
+        var groups: [TrayTagGroup]
         var configured: Bool
         var canOpen: Bool
         var canManage: Bool
@@ -73,7 +73,7 @@ import SwiftUI
         guard let store else { return }
         let next = MenuState(vaultID: vault?.id,
             name: vault == nil ? "Vault locked" : store.vaults.first(where: { $0.id == vault?.id })?.name ?? "Vault",
-            credentials: vault?.trayCredentials ?? [], configured: vault?.trayTags.isEmpty == false,
+            groups: vault?.trayTagGroups ?? [], configured: vault?.trayTags.isEmpty == false,
             canOpen: store.canUseTrayCredentials, canManage: store.canManageVault)
         guard force || state != next else { return }
         state = next
@@ -84,16 +84,28 @@ import SwiftUI
         menu.addItem(.separator())
         if vault != nil {
             add("Tagged Credentials", enabled: false)
-            if next.credentials.isEmpty {
+            if next.groups.allSatisfy({ $0.credentials.isEmpty }) {
                 add(next.configured ? "No credentials match the selected tags." : "Choose tags to show credentials here.", enabled: false)
             }
-            for credential in next.credentials {
-                let item = NSMenuItem(title: credential.title, action: #selector(activateCredential(_:)), keyEquivalent: "")
-                item.target = self; item.representedObject = credential.id; item.isEnabled = next.canOpen
-                item.toolTip = "\(credential.action.title): \(credential.fullTitle)"
-                item.image = NSImage(systemSymbolName: credential.action.symbol, accessibilityDescription: nil)
-                menu.addItem(item)
+            for group in next.groups {
+                let groupItem = NSMenuItem(title: group.title, action: nil, keyEquivalent: "")
+                groupItem.image = group.id.menuImage; groupItem.toolTip = group.title
+                groupItem.representedObject = group.id
+                let submenu = NSMenu(title: group.title); submenu.autoenablesItems = false
+                if group.credentials.isEmpty {
+                    let empty = NSMenuItem(title: "No credentials match this tag.", action: nil, keyEquivalent: "")
+                    empty.isEnabled = false; submenu.addItem(empty)
+                }
+                for credential in group.credentials {
+                    let item = NSMenuItem(title: credential.title, action: #selector(activateCredential(_:)), keyEquivalent: "")
+                    item.target = self; item.representedObject = credential.id; item.isEnabled = next.canOpen
+                    item.toolTip = "\(credential.action.title): \(credential.fullTitle)"
+                    item.image = NSImage(systemSymbolName: credential.action.symbol, accessibilityDescription: nil)
+                    submenu.addItem(item)
+                }
+                groupItem.submenu = submenu; menu.addItem(groupItem)
             }
+            add("Tag Names…", action: #selector(configureTagNames), enabled: next.canManage)
             add("Tray Tags…", action: #selector(configureTrayTags), enabled: next.canManage)
             menu.addItem(.separator())
         }
@@ -108,6 +120,10 @@ import SwiftUI
             // actionable errors need the existing main-window UI.
             if store.vault?.id == target.vaultID, store.sshPrompt != nil || store.error != nil { showWorkspace() }
         }
+    }
+    @objc private func configureTagNames() {
+        guard store?.canManageVault == true else { return }
+        showWorkspace(); store?.manageTagNames()
     }
     @objc private func configureTrayTags() {
         guard store?.canManageVault == true else { return }

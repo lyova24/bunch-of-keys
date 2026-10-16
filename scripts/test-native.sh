@@ -22,8 +22,8 @@ ssh-keygen -q -t ed25519 -N 'synthetic-tray-passphrase' -f "$scratch/tray-key"
   macos/Tests/NativeOutline.swift macos/Tests/NativeWindowSurface.swift \
   macos/Tests/NativeOutlineKeyboard.swift macos/Tests/NativeSearchExpansion.swift \
   macos/Tests/NativeTagFilter.swift \
-  macos/Sources/Keepy/TrayShortcut.swift macos/Sources/Keepy/TrayMenu.swift macos/Sources/Keepy/TrayTags.swift \
-  macos/Tests/NativeTrayShortcut.swift macos/Tests/NativeVaultManagement.swift macos/Tests/NativeTrayTags.swift \
+  macos/Sources/Keepy/TrayShortcut.swift macos/Sources/Keepy/TrayMenu.swift macos/Sources/Keepy/TrayTags.swift macos/Sources/Keepy/TagNames.swift \
+  macos/Tests/NativeTrayShortcut.swift macos/Tests/NativeVaultManagement.swift macos/Tests/NativeTrayTags.swift macos/Tests/NativeTagNames.swift \
   macos/Tests/Integration.swift -o "$scratch/integration"
 KEEPY_DATA_DIR="$scratch/data" "$scratch/integration" \
   "$PWD/target/macos/$arch/Keepy.app/Contents/MacOS/keepy-core" "$scratch/test-key" "$scratch/tray-key" | tee "$scratch/native-output.log"

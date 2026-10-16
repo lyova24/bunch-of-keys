@@ -70,6 +70,26 @@ Choose colors under Tags in the group or entry editor, then Save. Use Clear to
 remove all draft tags. Right-click an existing item and open Tags to toggle a
 color immediately or choose Remove All Tags.
 
+Choose **Vault → Tag Names…** (also in the vault picker and tray menu) to give
+the seven colors custom names for this vault. The editor prefills saved names. Use **Save** to
+apply changes or **Cancel** to keep the saved names. **Reset** beside a color,
+or an empty field, restores its default name when saved. Keyboard navigation
+works through the fields and buttons; Return saves and Escape cancels.
+
+Names are trimmed and limited to 40 Unicode characters (Unicode scalar values).
+Control characters and line breaks are not allowed. Names must be unique without
+regard to case, including the effective default names of other colors: for
+example, Green cannot be called Blue while Blue still uses that name. Invalid
+input shows an inline message and disables Save. A failed write keeps the old
+names and assignments; correct the error and retry or Cancel.
+
+Custom labels include the color, such as **Production (Green)**, in menus,
+filters, tooltips and accessibility labels. The tree keeps its compact colored
+indicators. Renaming immediately updates an active filter's description while
+its selected colors and matches stay unchanged. Names persist encrypted across
+lock/unlock and restart and are independent between vaults. Older vaults use the
+default color names until you customize them.
+
 Open Filter by Tags beside the search field and select one or more colors. An
 item matches if it has any selected color. A tagged group includes its
 descendants; an entry tag includes all its fields. Direct field matches keep
@@ -146,10 +166,14 @@ right-click the field in the tree and choose **Tags**. Colored dots beside the
 field label show its direct tags. The tag filter also finds individual fields.
 Existing vaults start with no field tags; editing or reordering preserves them.
 
-The menu bar lists individual fields matching any enabled color. Tags on an
+The menu bar first shows a collapsed submenu for each enabled tag, with its
+name and a colored marker. Open a tag group to see its matching fields; the
+main menu stays compact even with many credentials. Tags on an
 entry include all of its fields; tags on a group include every field below it.
-A field matching several colors appears once. Entry names, field labels and
-group paths identify each item; credential values never appear in the menu.
+A field matching several enabled colors appears once inside each matching
+tag group. Empty groups explain that no credentials match that tag. Entry names,
+field labels and group paths identify each item; credential values never appear
+in the menu.
 
 Selecting a field performs the same action as **Return** in the main tree:
 text and secrets copy to the clipboard, URLs open in the browser, and SSH fields

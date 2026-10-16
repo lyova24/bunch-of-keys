@@ -15,9 +15,19 @@ struct TrayCredential: Equatable, Identifiable {
     var fullTitle: String { "\(name) › \(label)" + (path.isEmpty ? "" : " — \(path)") }
     var title: String { fullTitle.count > 100 ? String(fullTitle.prefix(99)) + "…" : fullTitle }
 }
+struct TrayTagGroup: Equatable, Identifiable {
+    let id: TagColor
+    let title: String
+    let credentials: [TrayCredential]
+}
 extension Vault {
-    var trayCredentials: [TrayCredential] {
-        let enabled = Set(trayTags)
+    var trayCredentials: [TrayCredential] { matchingTrayCredentials(Set(trayTags)) }
+    var trayTagGroups: [TrayTagGroup] {
+        TagColor.allCases.filter { trayTags.contains($0) }.map { color in
+            TrayTagGroup(id: color, title: TagNaming.label(color, in: tagNames), credentials: matchingTrayCredentials([color]))
+        }
+    }
+    private func matchingTrayCredentials(_ enabled: Set<TagColor>) -> [TrayCredential] {
         guard !enabled.isEmpty else { return [] }
         var result: [TrayCredential] = [], seen = Set<CredentialTarget>()
         func visit(_ nodes: [VaultNode], ancestors: [String], inherited: Bool) {
@@ -75,11 +85,11 @@ struct TrayTagsEditor: View {
             ForEach(TagColor.allCases) { tag in
                 HStack {
                     Circle().fill(tag.color).frame(width: 12, height: 12).accessibilityHidden(true)
-                    Text(tag.title)
+                    Text(store.tagLabel(tag)).help(store.tagLabel(tag)).lineLimit(2).fixedSize(horizontal: false, vertical: true)
                     Spacer()
                     Toggle("Show in tray", isOn: Binding(get: { selected.contains(tag) }, set: {
                         if $0 { selected.insert(tag) } else { selected.remove(tag) }
-                    })).labelsHidden().toggleStyle(.switch).accessibilityLabel("\(tag.title): Show in tray")
+                    })).labelsHidden().toggleStyle(.switch).accessibilityLabel("\(store.tagLabel(tag)): Show in tray")
                 }
             }
             Text("Only unlocked vaults show credentials. Selecting a credential copies it, opens its URL, or connects via SSH, just like Return in Keepy. Finish open editors first.")

@@ -15,6 +15,7 @@ struct EditorView: View {
         case .renameVault(let vault): RenameVaultEditor(vault: vault)
         case .changeMasterPassword(let id): ChangeMasterPasswordEditor(vaultID: id)
         case .trayTags(let id): TrayTagsEditor(vaultID: id)
+        case .tagNames(let id): TagNamesEditor(vaultID: id)
         }
     }
 }
@@ -25,6 +26,7 @@ struct EditorError: View {
     }
 }
 struct TagPicker: View {
+    @EnvironmentObject var store: AppStore
     @Binding var selection: Set<TagColor>
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
@@ -42,14 +44,15 @@ struct TagPicker: View {
                             Circle().fill(tag.color).overlay { Circle().strokeBorder(.primary.opacity(0.18), lineWidth: 1) }
                             if selection.contains(tag) { Image(systemName: "checkmark").font(.system(size: 12, weight: .bold)).foregroundStyle(tag == .yellow ? .black : .white) }
                         }.frame(width: 26, height: 26).padding(3).contentShape(Rectangle())
-                    }.buttonStyle(.plain).help(tag.title)
-                        .accessibilityLabel("\(tag.title) tag")
+                    }.buttonStyle(.plain).help(store.tagLabel(tag))
+                        .accessibilityLabel("\(store.tagLabel(tag)) tag")
                         .accessibilityValue(selection.contains(tag) ? "Selected" : "Not selected")
                 }
                 Spacer(minLength: 0)
             }
-            Text(selection.isEmpty ? "No tags" : TagColor.allCases.filter { selection.contains($0) }.map(\.title).joined(separator: ", "))
+            Text(selection.isEmpty ? "No tags" : store.tagDescription(TagColor.allCases.filter { selection.contains($0) }))
                 .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                .help(store.tagDescription(TagColor.allCases.filter { selection.contains($0) }))
         }
     }
 }

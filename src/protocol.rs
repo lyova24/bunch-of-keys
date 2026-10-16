@@ -92,6 +92,10 @@ enum Command {
         field_id: Uuid,
         tags: Vec<TagColor>,
     },
+    SetTagNames {
+        vault_id: Uuid,
+        names: std::collections::BTreeMap<TagColor, String>,
+    },
     SetTrayTags {
         tags: Vec<TagColor>,
         vault_id: Uuid,
@@ -218,6 +222,11 @@ fn execute(state: &Arc<AppState>, command: Command) -> Result<Value, String> {
             state.save_settings(settings).map_err(|e| e.to_string())?;
             Ok(Value::Null)
         }
+        Command::SetTagNames { vault_id, names } => serde_json::to_value(
+            state
+                .set_tag_names(vault_id, names)
+                .map_err(|e| e.to_string())?,
+        ),
         Command::SetTrayTags { vault_id, tags } => serde_json::to_value(
             state
                 .set_tray_tags(vault_id, tags)
@@ -838,5 +847,64 @@ mod tests {
             cleared["nodes"][0]["children"][0]["fields"][0]["tags"],
             json!([])
         );
+    }
+    #[test]
+    fn tag_name_protocol_is_encrypted_vault_bound_and_preserves_assignments() {
+        let fixture = tagged_fixture();
+        let state = &fixture.state;
+        let before = run_command(state, json!({"command":"bootstrap"})).unwrap()["current"].clone();
+        assert_eq!(before["tag_names"], json!({}));
+        let named = run_command(state, json!({"command":"set_tag_names","vault_id":fixture.vault_id,"names":{"green":"  Production ","red":"Personal"}})).unwrap();
+        assert_eq!(
+            named["tag_names"],
+            json!({"green":"Production","red":"Personal"})
+        );
+        assert_eq!(named["nodes"], before["nodes"]);
+        assert!(run_command(state, json!({"command":"set_tag_names","vault_id":fixture.vault_id,"names":{"green":"Blue"}})).is_err());
+        assert_eq!(
+            run_command(state, json!({"command":"bootstrap"})).unwrap()["current"],
+            named
+        );
+        let other = run_command(
+            state,
+            json!({"command":"create_vault","name":"Other names","password":"password123"}),
+        )
+        .unwrap();
+        assert_eq!(other["tag_names"], json!({}));
+        assert!(
+            run_command(
+                state,
+                json!({"command":"set_tag_names","vault_id":fixture.vault_id,"names":{}})
+            )
+            .is_err()
+        );
+        assert_eq!(
+            run_command(state, json!({"command":"bootstrap"})).unwrap()["current"],
+            other
+        );
+        run_command(state, json!({"command":"lock_vault"})).unwrap();
+        assert!(
+            run_command(
+                state,
+                json!({"command":"set_tag_names","vault_id":fixture.vault_id,"names":{}})
+            )
+            .is_err()
+        );
+        let storage = AppStorage::new(fixture.directory.path(), fixture.directory.path()).unwrap();
+        let config = storage.load_config().unwrap();
+        assert!(
+            !serde_json::to_string(&config)
+                .unwrap()
+                .contains("Production")
+        );
+        assert!(
+            !String::from_utf8_lossy(&storage.read_vault(&config.vaults[0]).unwrap())
+                .contains("Production")
+        );
+        let restarted = Arc::new(AppState::new(storage, config));
+        assert_eq!(run_command(&restarted,json!({"command":"unlock_vault","vault_id":fixture.vault_id,"password":"password123"})).unwrap(), named);
+        let reset = run_command(&restarted,json!({"command":"set_tag_names","vault_id":fixture.vault_id,"names":{"green":"","red":"Red"}})).unwrap();
+        assert_eq!(reset["tag_names"], json!({}));
+        assert_eq!(reset["nodes"], before["nodes"]);
     }
 }

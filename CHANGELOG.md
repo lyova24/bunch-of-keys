@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.2.9 - 2026-10-17
+
+- Add encrypted per-vault custom names for the seven existing tag colors (#51).
+- Provide a Tag Names editor with Save, Cancel, per-color Reset, trimming,
+  a 40-character limit and case-insensitive validation against all effective names.
+- Group tray credentials in collapsed native submenus per enabled tag, with
+  colored markers, custom names and coherent empty states.
+- Show custom names with their colors throughout pickers, context menus,
+  filters, tray settings, tooltips and accessibility; preserve stable identities,
+  tag assignments and active filters across rename/reset and failed saves.
+
 ## 2.2.8 - 2026-10-17
 
 - Adopt macOS SDK 27 with matching Xcode/Command Line Tools 27, a shared

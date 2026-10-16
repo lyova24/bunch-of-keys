@@ -59,8 +59,9 @@ struct WorkspaceView: View {
                         ForEach(TagColor.allCases.filter { store.tagFilter.contains($0) }) { tag in
                             Circle().fill(tag.color).frame(width: 8, height: 8).accessibilityHidden(true)
                         }
-                        Text("Tags: \(TagColor.allCases.filter { store.tagFilter.contains($0) }.map(\.title).joined(separator: ", "))")
+                        Text("Tags: \(store.tagDescription(TagColor.allCases.filter { store.tagFilter.contains($0) }))")
                             .lineLimit(1).truncationMode(.tail)
+                            .help(store.tagDescription(TagColor.allCases.filter { store.tagFilter.contains($0) }))
                         Spacer(minLength: 4)
                         Button("Clear") { store.tagFilter.removeAll() }.buttonStyle(.plain).help("Clear Tag Filters")
                             .accessibilityLabel("Clear Tag Filters").disabled(store.editor != nil || store.busy)
@@ -147,6 +148,7 @@ struct WorkspaceView: View {
             Divider()
             Button("Rename Vault…") { store.manageVault(password: false) }.disabled(!store.canManageVault)
             Button("Change Master Password…") { store.manageVault(password: true) }.disabled(!store.canManageVault)
+            Button("Tag Names…") { store.manageTagNames() }.disabled(!store.canManageVault)
             Button("Tray Tags…") { store.manageTrayTags() }.disabled(!store.canManageVault)
             Button("SSH Keys…") { store.showingKeys = true }
             Button("Touch ID…") { store.manageTouchID() }.disabled(!store.canManageTouchID).help(store.touchIDHelp)
@@ -171,13 +173,13 @@ struct TagFilterPalette: View {
                     } label: {
                         HStack(spacing: 10) {
                             Circle().fill(tag.color).overlay(Circle().stroke(.primary.opacity(0.15), lineWidth: 0.5)).frame(width: 12, height: 12)
-                            Text(tag.title)
+                            Text(store.tagLabel(tag)).lineLimit(2).fixedSize(horizontal: false, vertical: true)
                             Spacer()
                             if selected { Image(systemName: "checkmark").fontWeight(.semibold).foregroundStyle(.tint) }
                         }.padding(.horizontal, 8).padding(.vertical, 6).contentShape(Rectangle())
                             .background(navigation.activeColor == tag ? Color.accentColor.opacity(0.18) : Color.clear, in: RoundedRectangle(cornerRadius: 5))
                             .overlay(RoundedRectangle(cornerRadius: 5).stroke(navigation.activeColor == tag ? Color.accentColor.opacity(0.6) : Color.clear, lineWidth: 1))
-                    }.buttonStyle(.plain).accessibilityLabel("\(tag.title) tag filter")
+                    }.buttonStyle(.plain).accessibilityLabel("\(store.tagLabel(tag)) tag filter").help(store.tagLabel(tag))
                         .accessibilityValue(selected ? "Selected" : "Not selected")
                         .onHover { hovering in if hovering { navigation.activeColor = tag } }
                 }
@@ -189,7 +191,7 @@ struct TagFilterPalette: View {
                 .background(navigation.activeColor == nil ? Color.accentColor.opacity(0.18) : Color.clear, in: RoundedRectangle(cornerRadius: 5))
                 .onHover { hovering in if hovering && !store.tagFilter.isEmpty { navigation.activeColor = nil } }
             Text("↑↓ Select · Return Toggle · Esc Close").font(.caption2).foregroundStyle(.secondary)
-        }.padding(14).frame(width: 240).disabled(store.busy || store.editor != nil)
+        }.padding(14).frame(width: 260).disabled(store.busy || store.editor != nil)
             .onChange(of: store.tagFilter) { _, colors in if colors.isEmpty && navigation.activeColor == nil { navigation.activeColor = .red } }
     }
 }
@@ -385,8 +387,8 @@ struct FieldRow: View {
                 HStack(spacing: 5) {
                     Text(field.label).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                     ForEach(field.tags) { tag in
-                        Circle().fill(tag.color).frame(width: 7, height: 7).help(tag.title)
-                            .accessibilityLabel("\(tag.title) tag")
+                        Circle().fill(tag.color).frame(width: 7, height: 7).help(store.tagLabel(tag))
+                            .accessibilityLabel("\(store.tagLabel(tag)) tag")
                     }
                 }
                 if let ssh = field.ssh {

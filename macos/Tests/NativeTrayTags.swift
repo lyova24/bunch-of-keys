@@ -73,15 +73,25 @@ import Foundation
         tray.start(store: store, shortcuts: shortcut, openWindow: { opens += 1 }, openSettings: {})
         defer { tray.stop() }
         tray.menuNeedsUpdate(tray.menu)
-        func items() -> [NSMenuItem] { tray.menu.items.filter { $0.representedObject is CredentialTarget } }
+        func items() -> [NSMenuItem] {
+            tray.menu.items.flatMap { $0.submenu?.items ?? [] }.filter { $0.representedObject is CredentialTarget }
+        }
         func item(_ entry: String, _ field: String? = nil) -> NSMenuItem {
             items().first { item in
                 guard let target = item.representedObject as? CredentialTarget else { return false }
                 return target.entryID == entry && (field == nil || target.fieldID == field)
             }!
         }
-        precondition(items().count == 5)
-        let titles = tray.menu.items.map { $0.title + ($0.toolTip ?? "") }.joined()
+        precondition(items().count == 7 && Set(items().compactMap { $0.representedObject as? CredentialTarget }).count == 5)
+        precondition(!tray.menu.items.contains { $0.representedObject is CredentialTarget }, "Credentials must live inside tag submenus")
+        let groups = tray.menu.items.filter { $0.representedObject is TagColor }
+        precondition(groups.map(\.title) == ["Red", "Blue"] && groups.allSatisfy { $0.image != nil })
+        precondition(groups[0].submenu!.items.count == 3 && groups[1].submenu!.items.count == 4)
+        for group in groups {
+            let targets = group.submenu!.items.compactMap { $0.representedObject as? CredentialTarget }
+            precondition(Set(targets).count == targets.count, "No duplicate credentials inside one tag group")
+        }
+        let titles = (tray.menu.items + items()).map { $0.title + ($0.toolTip ?? "") }.joined()
         precondition(!titles.contains("synthetic-user") && !titles.contains("synthetic-field-secret"))
         let captured = item(direct, password)
         store.search = "no match"; store.tagFilter = [.orange]; store.selection = excluded
@@ -136,6 +146,8 @@ import Foundation
         let empty = await store.saveTrayTags([.gray], vaultID: id)
         precondition(empty)
         try await waitFor { tray.menu.items.contains { $0.title == "No credentials match the selected tags." } }
+        let emptyGroup = tray.menu.items.first { $0.representedObject as? TagColor == .gray }!
+        precondition(emptyGroup.image != nil && emptyGroup.submenu!.items[0].title == "No credentials match this tag." && !emptyGroup.submenu!.items[0].isEnabled)
         let restored = await store.saveTrayTags([.blue], vaultID: id)
         precondition(restored)
         let retaggedBack = await store.setFieldTags([.blue], entry: direct, field: password)

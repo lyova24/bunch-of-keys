@@ -443,6 +443,17 @@ impl AppState {
         self.mutate_current(None, operation)
     }
 
+    pub fn set_tag_names(
+        &self,
+        vault_id: Uuid,
+        names: std::collections::BTreeMap<crate::core::TagColor, String>,
+    ) -> Result<VaultView, AppError> {
+        self.mutate_current(Some(vault_id), |data| {
+            data.set_tag_names(names)?;
+            Ok(())
+        })
+    }
+
     pub fn set_tray_tags(
         &self,
         vault_id: Uuid,

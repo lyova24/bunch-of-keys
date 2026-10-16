@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use ssh_key::{HashAlg, PrivateKey};
+use std::collections::BTreeMap;
 use thiserror::Error;
 use uuid::Uuid;
 use zeroize::Zeroize;
@@ -14,6 +15,8 @@ const CURRENT_SCHEMA_VERSION: u16 = 2;
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct VaultData {
     pub schema_version: u16,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub tag_names: BTreeMap<TagColor, String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tray_tags: Vec<TagColor>,
     #[serde(default)]
@@ -25,6 +28,7 @@ impl Default for VaultData {
     fn default() -> Self {
         Self {
             schema_version: CURRENT_SCHEMA_VERSION,
+            tag_names: BTreeMap::new(),
             tray_tags: Vec::new(),
             ssh_keys: Vec::new(),
             nodes: Vec::new(),
@@ -125,7 +129,7 @@ pub struct Entry {
     pub fields: Vec<CredentialField>,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "snake_case")]
 pub enum TagColor {
     Red,
@@ -135,6 +139,62 @@ pub enum TagColor {
     Blue,
     Purple,
     Gray,
+}
+
+impl TagColor {
+    pub const ALL: [Self; 7] = [
+        Self::Red,
+        Self::Orange,
+        Self::Yellow,
+        Self::Green,
+        Self::Blue,
+        Self::Purple,
+        Self::Gray,
+    ];
+    pub const fn default_name(self) -> &'static str {
+        match self {
+            Self::Red => "Red",
+            Self::Orange => "Orange",
+            Self::Yellow => "Yellow",
+            Self::Green => "Green",
+            Self::Blue => "Blue",
+            Self::Purple => "Purple",
+            Self::Gray => "Gray",
+        }
+    }
+}
+
+fn validated_tag_names(
+    names: BTreeMap<TagColor, String>,
+) -> Result<BTreeMap<TagColor, String>, ModelError> {
+    let mut normalized = BTreeMap::new();
+    for (color, name) in names {
+        let name = name.trim();
+        if name.chars().count() > 40 {
+            return Err(ModelError::TagNameTooLong);
+        }
+        if name
+            .chars()
+            .any(|c| c.is_control() || matches!(c, '\u{2028}' | '\u{2029}'))
+        {
+            return Err(ModelError::InvalidTagName);
+        }
+        if !name.is_empty() && name.to_lowercase() != color.default_name().to_lowercase() {
+            normalized.insert(color, name.to_owned());
+        }
+    }
+    let mut seen = Vec::new();
+    for color in TagColor::ALL {
+        let name = normalized
+            .get(&color)
+            .map_or(color.default_name(), String::as_str)
+            .to_lowercase();
+        if seen.contains(&name) {
+            return Err(ModelError::DuplicateTagName);
+        }
+        seen.push(name);
+    }
+    Ok(normalized)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -176,6 +236,14 @@ pub struct FieldInput {
 
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum ModelError {
+    #[error("tag names must contain at most 40 characters")]
+    TagNameTooLong,
+    #[error("tag names must not contain control characters or line breaks")]
+    InvalidTagName,
+    #[error(
+        "tag names must be unique within the vault, including default color names (case-insensitive)"
+    )]
+    DuplicateTagName,
     #[error("name must not be empty")]
     EmptyName,
     #[error("name is too long")]
@@ -231,6 +299,10 @@ pub enum ModelError {
 }
 
 impl VaultData {
+    pub fn set_tag_names(&mut self, names: BTreeMap<TagColor, String>) -> Result<(), ModelError> {
+        self.tag_names = validated_tag_names(names)?;
+        Ok(())
+    }
     pub fn set_tray_tags(&mut self, tags: Vec<TagColor>) -> Result<(), ModelError> {
         validate_tags(&tags)?;
         self.tray_tags = tags;
@@ -524,6 +596,7 @@ impl VaultData {
     }
 
     pub fn validate(&self) -> Result<(), ModelError> {
+        validated_tag_names(self.tag_names.clone())?;
         validate_tags(&self.tray_tags)?;
         if !(1..=CURRENT_SCHEMA_VERSION).contains(&self.schema_version) {
             return Err(ModelError::UnsupportedSchema);
@@ -551,6 +624,7 @@ impl VaultData {
 
     pub fn migrate(&mut self) -> Result<(), ModelError> {
         self.validate()?;
+        self.tag_names = validated_tag_names(self.tag_names.clone())?;
         self.schema_version = CURRENT_SCHEMA_VERSION;
         Ok(())
     }
@@ -1484,5 +1558,52 @@ mod tests {
         assert_eq!(data, expected);
         data.tray_tags = vec![TagColor::Red, TagColor::Red];
         assert!(data.validate().is_err());
+    }
+    #[test]
+    fn tag_names_validate_normalize_and_preserve_legacy_defaults() {
+        let mut vault: VaultData =
+            serde_json::from_str(r#"{"schema_version":2,"nodes":[]}"#).unwrap();
+        assert!(vault.tag_names.is_empty());
+        vault
+            .set_tag_names(BTreeMap::from([
+                (TagColor::Green, "  Production  ".into()),
+                (TagColor::Red, "red".into()),
+            ]))
+            .unwrap();
+        assert_eq!(
+            vault.tag_names,
+            BTreeMap::from([(TagColor::Green, "Production".into())])
+        );
+        let before = vault.clone();
+        for names in [
+            BTreeMap::from([(TagColor::Green, "Blue".into())]),
+            BTreeMap::from([
+                (TagColor::Green, "Production".into()),
+                (TagColor::Blue, "pRODUCTion".into()),
+            ]),
+            BTreeMap::from([
+                (TagColor::Green, "Работа".into()),
+                (TagColor::Blue, "работа".into()),
+            ]),
+            BTreeMap::from([(TagColor::Green, "x".repeat(41))]),
+            BTreeMap::from([(TagColor::Green, "bad\nname".into())]),
+            BTreeMap::from([(TagColor::Green, "bad\0name".into())]),
+        ] {
+            assert!(vault.set_tag_names(names).is_err());
+            assert_eq!(vault, before);
+        }
+        vault
+            .set_tag_names(BTreeMap::from([(TagColor::Green, "Ж".repeat(40))]))
+            .unwrap();
+        vault
+            .set_tag_names(BTreeMap::from([(TagColor::Green, " \t ".into())]))
+            .unwrap();
+        assert!(vault.tag_names.is_empty());
+        assert!(
+            serde_json::from_value::<VaultData>(
+                serde_json::json!({"schema_version":2,"nodes":[],"tag_names":{"pink":"Bad"}})
+            )
+            .is_err()
+        );
     }
 }

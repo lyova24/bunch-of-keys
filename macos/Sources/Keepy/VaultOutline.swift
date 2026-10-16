@@ -9,12 +9,13 @@ private let fieldPasteboardType = NSPasteboard.PasteboardType("dev.keepy.saved-f
 // VoiceOver the color names as well as the visual indication.
 final class TagDotsView: NSView {
     let tags: [TagColor]
-    init(tags: [TagColor]) {
+    init(tags: [TagColor], names: [String: String] = [:]) {
         self.tags = tags
         super.init(frame: .zero)
         setAccessibilityElement(true)
         setAccessibilityRole(.image)
-        setAccessibilityLabel("Tags: \(tags.map(\.title).joined(separator: ", "))")
+        let description = tags.map { TagNaming.label($0, in: names) }.joined(separator: ", ")
+        setAccessibilityLabel("Tags: \(description)"); toolTip = description
     }
     required init?(coder: NSCoder) { nil }
     override var intrinsicContentSize: NSSize { NSSize(width: CGFloat(tags.count * 13 - 4), height: 10) }
@@ -175,6 +176,7 @@ struct VaultOutline: NSViewRepresentable {
         var roots: [OutlineNode] = []
         var boxes: [String: OutlineNode] = [:]
         var previous: [VaultNode] = []
+        var previousTagNames: [String: String] = [:]
         var previousSearch = ""
         var previousTags = Set<TagColor>()
         var editorSignature = ""
@@ -219,9 +221,10 @@ struct VaultOutline: NSViewRepresentable {
             let signature = route.map { "\($0.id):\($0.parentId ?? "root"):\($0.insertionIndex ?? -1)" } ?? ""
             updating = true; defer { updating = false }
             let selectedItem = outline.item(atRow: outline.selectedRow) as? OutlineNode
-            if previous != nodes || signature != editorSignature || previousSearch != store.search || previousTags != store.tagFilter {
+            if previous != nodes || previousTagNames != (store.vault?.tagNames ?? [:]) || signature != editorSignature || previousSearch != store.search || previousTags != store.tagFilter {
                 if previousTags.isEmpty && !store.tagFilter.isEmpty { tagExpanded = expanded }
                 let oldRoute = editorHost?.rootView.routeId
+                previousTagNames = store.vault?.tagNames ?? [:]
                 previous = nodes; editorSignature = signature; previousSearch = store.search; previousTags = store.tagFilter
                 var next: [String: OutlineNode] = [:]
                 func box(_ id: String) -> OutlineNode {
@@ -371,7 +374,7 @@ struct VaultOutline: NSViewRepresentable {
             ]
             let tags = item.node?.tags ?? []
             if !tags.isEmpty {
-                let dots = TagDotsView(tags: tags); dots.translatesAutoresizingMaskIntoConstraints = false
+                let dots = TagDotsView(tags: tags, names: store.vault?.tagNames ?? [:]); dots.translatesAutoresizingMaskIntoConstraints = false
                 dots.setContentHuggingPriority(.required, for: .horizontal)
                 dots.setContentCompressionResistancePriority(.required, for: .horizontal)
                 cell.addSubview(dots)
@@ -379,7 +382,7 @@ struct VaultOutline: NSViewRepresentable {
                 constraints += [cell.trailingConstraint!,
                                 dots.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
                                 text.trailingAnchor.constraint(equalTo: dots.leadingAnchor, constant: -10)]
-                cell.setAccessibilityLabel("\(name), tags: \(tags.map(\.title).joined(separator: ", "))")
+                cell.setAccessibilityLabel("\(name), tags: \(store.tagDescription(tags))")
             } else {
                 cell.trailingConstraint = text.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -6)
                 constraints.append(cell.trailingConstraint!)
@@ -479,7 +482,7 @@ struct VaultOutline: NSViewRepresentable {
                 tagsItem.isEnabled = !store.busy && store.editor == nil
                 let tagsMenu = NSMenu(title: "Tags"); tagsMenu.autoenablesItems = false
                 for tag in TagColor.allCases {
-                    let tagItem = NSMenuItem(title: tag.title, action: #selector(toggleTag(_:)), keyEquivalent: "")
+                    let tagItem = NSMenuItem(title: store.tagLabel(tag), action: #selector(toggleTag(_:)), keyEquivalent: "")
                     tagItem.target = self; tagItem.representedObject = tag.rawValue; tagItem.image = tag.menuImage
                     tagItem.state = tags.contains(tag) ? .on : .off
                     tagItem.isEnabled = !store.busy && store.editor == nil

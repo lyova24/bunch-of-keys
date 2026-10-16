@@ -7,6 +7,7 @@ use crate::core::{CredentialField, Entry, FieldKind, Group, Node, SshKey, TagCol
 pub struct VaultView {
     pub id: Uuid,
     pub tray_tags: Vec<TagColor>,
+    pub tag_names: std::collections::BTreeMap<TagColor, String>,
     pub ssh_keys: Vec<SshKeyView>,
     pub nodes: Vec<NodeView>,
 }
@@ -67,6 +68,7 @@ impl VaultView {
         Self {
             id,
             tray_tags: data.tray_tags.clone(),
+            tag_names: data.tag_names.clone(),
             ssh_keys: data.ssh_keys.iter().map(SshKeyView::from).collect(),
             nodes: data
                 .nodes

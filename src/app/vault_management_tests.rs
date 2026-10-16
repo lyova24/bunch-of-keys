@@ -92,6 +92,10 @@ fn populate_vault(state: &AppState) {
     state
         .mutate(|data| {
             data.set_tray_tags(vec![TagColor::Blue])?;
+            data.set_tag_names(std::collections::BTreeMap::from([(
+                TagColor::Green,
+                "Production".into(),
+            )]))?;
             let key = data.add_ssh_key("Test SSH key", &private)?;
             let group = data.add_group_with_tags(None, "Tagged group", vec![TagColor::Blue])?;
             let nested = data.add_group(Some(group), "Nested")?;
@@ -259,4 +263,40 @@ fn failed_password_write_preserves_original_password_session_and_biometric_bindi
     assert!(state.change_master_password(id, OLD, NEW, NEW).is_err());
     assert!(state.unlock_vault(id, OLD).is_ok());
     assert!(state.unlock_vault(id, NEW).is_err());
+}
+
+#[test]
+fn failed_tag_name_write_preserves_names_assignments_and_encrypted_bytes() {
+    let directory = tempdir().unwrap();
+    let storage = AppStorage::new(directory.path(), directory.path()).unwrap();
+    let state = AppState::new(storage.clone(), AppConfig::default());
+    let id = state.create_vault("Tag names", OLD).unwrap().id;
+    populate_vault(&state);
+    let before = serde_json::to_value(state.bootstrap().unwrap().current.unwrap()).unwrap();
+    let record = storage.load_config().unwrap().vaults[0].clone();
+    let path = directory.path().join("vaults").join(&record.file_name);
+    let backup = path.with_extension("original");
+    let bytes = fs::read(&path).unwrap();
+    fs::rename(&path, &backup).unwrap();
+    fs::create_dir(&path).unwrap();
+    assert!(
+        state
+            .set_tag_names(
+                id,
+                std::collections::BTreeMap::from([(TagColor::Green, "Updated".into())])
+            )
+            .is_err()
+    );
+    assert_eq!(
+        serde_json::to_value(state.bootstrap().unwrap().current.unwrap()).unwrap(),
+        before
+    );
+    assert_eq!(fs::read(&backup).unwrap(), bytes);
+    fs::remove_dir(&path).unwrap();
+    fs::rename(backup, path).unwrap();
+    state.lock();
+    assert_eq!(
+        serde_json::to_value(state.unlock_vault(id, OLD).unwrap()).unwrap(),
+        before
+    );
 }

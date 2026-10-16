@@ -138,3 +138,19 @@ using the same action dispatcher as Return in the outline. Clipboard, URL and
 SSH responses check the session generation before publishing effects. Successful
 background actions do not navigate or open the workspace; errors and encrypted
 SSH passphrase requests use the existing window UI.
+
+Optional `tag_names` maps the seven existing color identities to custom names
+inside the encrypted payload. Empty/own-default names normalize to no override;
+names are trimmed, limited to 40 Unicode scalars, and compared in lowercase
+against every effective name (including defaults). The vault-bound mutation
+validates a clone before encrypting and atomically writing it. A failed write
+never commits names or changes node/field tags. Public registry summaries do not
+contain tag names. Swift resolves labels through the current vault and reloads
+outline presentation on metadata changes without changing filters or expansion.
+
+The tray projects matching fields into one native submenu per enabled color,
+ordered by the stable color list. Each group has a colored marker and current
+custom label; credentials are deduplicated within each group. Fields matching
+several tags are available in every matching group. Menu snapshots include group
+labels so renaming refreshes existing menus, while entry actions still revalidate
+the current vault and eligible field IDs before dispatch.

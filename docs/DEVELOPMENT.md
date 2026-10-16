@@ -173,3 +173,10 @@ Field tray-action coverage uses a private pasteboard, an injected URL opener and
 an encrypted synthetic SSH key (stopping at the passphrase prompt). It verifies
 field-tag editor payloads/context menus, inherited matching, Return parity,
 clipboard expiry and stale menu targets without launching a browser or Terminal.
+
+Tag-name tests cover legacy decoding, Unicode limits, collisions with default
+names, encrypted persistence, vault isolation, filter/tray/assignment stability,
+context-menu labels, reset, colored tray groups and live submenu renaming.
+Failed-write tests temporarily replace an isolated test vault file with a
+directory to force atomic-rename failure, then restore and reopen its original
+encrypted bytes; no user vaults are used.

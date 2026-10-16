@@ -31,6 +31,7 @@ import CoreServices
             CommandMenu("Vault") {
                 Button("Rename Vault…") { store.manageVault(password: false) }.disabled(!store.canManageVault)
                 Button("Change Master Password…") { store.manageVault(password: true) }.disabled(!store.canManageVault)
+                Button("Tag Names…") { store.manageTagNames() }.disabled(!store.canManageVault)
                 Button("Tray Tags…") { store.manageTrayTags() }.disabled(!store.canManageVault)
                 Divider()
                 Button("Lock Vault") { store.lock() }.keyboardShortcut("l", modifiers: [.command, .shift]).disabled(store.vault == nil)

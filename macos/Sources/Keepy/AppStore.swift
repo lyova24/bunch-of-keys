@@ -4,7 +4,7 @@ import ServiceManagement
 import UniformTypeIdentifiers
 
 struct EditorRoute: Identifiable {
-    enum Kind { case entry(VaultNode?), group(VaultNode?), keys, createVault, renameVault(VaultSummary), changeMasterPassword(String), trayTags(String) }
+    enum Kind { case entry(VaultNode?), group(VaultNode?), keys, createVault, renameVault(VaultSummary), changeMasterPassword(String), trayTags(String), tagNames(String) }
     var id = UUID()
     var kind: Kind
     var parentId: String?
