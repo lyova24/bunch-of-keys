@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
+source scripts/macos-toolchain.sh
 scratch=$(mktemp -d)
 trap 'rm -rf "$scratch"' EXIT
 umask 077
-xcrun swift -sdk "${SDKROOT:-$(xcrun --sdk macosx --show-sdk-path)}" \
-  -module-cache-path target/swift-module-cache scripts/test-update-signatures.swift "$scratch"
+host_arch=$(uname -m)
+"$KEEPY_SWIFT" -swift-version 5 -warnings-as-errors -target "$host_arch-apple-macosx14.0" -sdk "$SDKROOT" \
+  -module-cache-path "$KEEPY_SWIFT_MODULE_CACHE" scripts/test-update-signatures.swift "$scratch"
 signer=target/sparkle/bin/sign_update
 signature=$("$signer" --ed-key-file "$scratch/test-key" -p "$scratch/valid.zip")
 "$signer" --ed-key-file "$scratch/test-key" --verify "$scratch/valid.zip" "$signature"
@@ -26,9 +28,9 @@ if target/macos/verify-update "$scratch/Probe.app/Contents/Info.plist" "$scratch
   echo 'Public-key verification accepted a modified archive' >&2
   exit 1
 fi
-xcrun swiftc -swift-version 5 -warnings-as-errors \
-  -sdk "${SDKROOT:-$(xcrun --sdk macosx --show-sdk-path)}" \
-  -module-cache-path target/swift-module-cache -parse-as-library \
+"$KEEPY_SWIFTC" -swift-version 5 -warnings-as-errors -target "$host_arch-apple-macosx14.0" \
+  -sdk "$SDKROOT" \
+  -module-cache-path "$KEEPY_SWIFT_MODULE_CACHE" -parse-as-library \
   -F target/sparkle -framework Sparkle -Xlinker -rpath -Xlinker "$PWD/target/sparkle" \
   macos/Tests/UpdateTransport.swift -o "$scratch/transport"
 python3 - "$scratch" <<'PY'

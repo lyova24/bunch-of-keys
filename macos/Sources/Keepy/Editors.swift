@@ -59,17 +59,17 @@ struct EntryEditor: View {
     var parentId: String?
     var insertionIndex: Int?
     var routeId: String
-    @State private var name = ""
-    @State private var fields: [FieldDraft] = []
-    @State private var loaded = false
-    @State private var dragging: String?
-    @State private var dirty = false
-    @State private var initialName = ""
-    @State private var initialFields: [FieldDraft] = []
-    @State private var tags = Set<TagColor>()
-    @State private var initialTags = Set<TagColor>()
+    @ViewState private var name = ""
+    @ViewState private var fields: [FieldDraft] = []
+    @ViewState private var loaded = false
+    @ViewState private var dragging: String?
+    @ViewState private var dirty = false
+    @ViewState private var initialName = ""
+    @ViewState private var initialFields: [FieldDraft] = []
+    @ViewState private var tags = Set<TagColor>()
+    @ViewState private var initialTags = Set<TagColor>()
     var hasChanges: Bool { name != initialName || fields != initialFields || tags != initialTags }
-    @State private var confirmDiscard = false
+    @ViewState private var confirmDiscard = false
     var valid: Bool {
         !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && fields.allSatisfy {
             !$0.label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
@@ -160,7 +160,7 @@ struct FieldEditor: View {
     @EnvironmentObject var store: AppStore
     @Binding var field: FieldDraft
     @Binding var dragging: String?
-    @State private var showValue = false
+    @ViewState private var showValue = false
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -222,12 +222,12 @@ struct GroupEditor: View {
     var parentId: String?
     var insertionIndex: Int?
     var routeId: String
-    @State private var name = ""
-    @State private var loaded = false
-    @State private var tags = Set<TagColor>()
-    @State private var initialName = ""
-    @State private var initialTags = Set<TagColor>()
-    @State private var confirmDiscard = false
+    @ViewState private var name = ""
+    @ViewState private var loaded = false
+    @ViewState private var tags = Set<TagColor>()
+    @ViewState private var initialName = ""
+    @ViewState private var initialTags = Set<TagColor>()
+    @ViewState private var confirmDiscard = false
     var hasChanges: Bool { name != initialName || tags != initialTags }
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -263,9 +263,9 @@ struct GroupEditor: View {
 struct NewVaultEditor: View {
     @EnvironmentObject var store: AppStore
     @Environment(\.dismiss) private var dismiss
-    @State private var name = ""
-    @State private var password = ""
-    @State private var confirmation = ""
+    @ViewState private var name = ""
+    @ViewState private var password = ""
+    @ViewState private var confirmation = ""
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("New Vault").font(.title2.weight(.semibold))
@@ -286,8 +286,8 @@ struct NewVaultEditor: View {
 struct SSHPassphraseView: View {
     @EnvironmentObject var store: AppStore
     @Environment(\.dismiss) private var dismiss
-    @State private var passphrase = ""
-    @State private var busy = false
+    @ViewState private var passphrase = ""
+    @ViewState private var busy = false
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             Label("Unlock SSH Key", systemImage: "key").font(.title2.weight(.semibold))

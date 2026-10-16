@@ -15,8 +15,8 @@ enum PasswordChangeValidation {
 struct RenameVaultEditor: View {
     @EnvironmentObject var store: AppStore
     let vault: VaultSummary
-    @State private var name = ""
-    @State private var edited = false
+    @ViewState private var name = ""
+    @ViewState private var edited = false
     @FocusState private var focused: Bool
     private var normalized: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
     private var validation: String? { store.vaultNameError(name, excluding: vault.id) }
@@ -45,10 +45,10 @@ struct RenameVaultEditor: View {
 struct ChangeMasterPasswordEditor: View {
     @EnvironmentObject var store: AppStore
     let vaultID: String
-    @State private var current = ""
-    @State private var new = ""
-    @State private var confirmation = ""
-    @State private var attempted = false
+    @ViewState private var current = ""
+    @ViewState private var new = ""
+    @ViewState private var confirmation = ""
+    @ViewState private var attempted = false
     @FocusState private var focused: Bool
     private var validation: String? { PasswordChangeValidation.error(current: current, new: new, confirmation: confirmation) }
     var body: some View {

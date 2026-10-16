@@ -4,8 +4,8 @@ import ServiceManagement
 struct SettingsView: View {
     @EnvironmentObject var store: AppStore
     @EnvironmentObject var updates: UpdateController
-    @State private var draft = Preferences()
-    @State private var saving = false
+    @ViewState private var draft = Preferences()
+    @ViewState private var saving = false
     var body: some View {
         VStack(spacing: 0) {
             Form {

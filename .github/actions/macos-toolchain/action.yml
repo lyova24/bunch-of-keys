@@ -1,0 +1,10 @@
+name: Select SDK 27 Apple toolchain
+description: Pin Xcode 27.0 and prove Swift/Clang/linker compatibility for both macOS architectures.
+runs:
+  using: composite
+  steps:
+    - name: Select and verify Xcode 27.0
+      shell: bash
+      env:
+        DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
+      run: python3 scripts/check-macos-toolchain.py --github-env "$GITHUB_ENV"

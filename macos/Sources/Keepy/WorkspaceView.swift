@@ -14,7 +14,7 @@ struct GlassSurface: ViewModifier {
 }
 struct WorkspaceView: View {
     @EnvironmentObject var store: AppStore
-    @State private var showingTagFilters = false
+    @ViewState private var showingTagFilters = false
     @StateObject private var tagNavigation = TagFilterNavigation()
     var body: some View {
         VStack(spacing: 0) {
@@ -312,9 +312,9 @@ final class TagFilterKeyboardView: NSView {
 struct AuthenticationView: View {
     @EnvironmentObject var store: AppStore
     var creating: Bool
-    @State private var name = ""
-    @State private var password = ""
-    @State private var confirmation = ""
+    @ViewState private var name = ""
+    @ViewState private var password = ""
+    @ViewState private var confirmation = ""
     @FocusState private var passwordFocused: Bool
     var body: some View {
         VStack(spacing: 20) {

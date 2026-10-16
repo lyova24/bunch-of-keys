@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
+source scripts/macos-toolchain.sh
 [[ "$(uname -s)" == Darwin ]] || { echo 'macOS is required.' >&2; exit 1; }
 bash scripts/check-version-sync.sh
 bash scripts/fetch-sparkle.sh
@@ -10,24 +11,22 @@ case "$arch" in
   x86_64) rust_target=x86_64-apple-darwin ;;
   *) echo "Unsupported architecture: $arch" >&2; exit 1 ;;
 esac
-export SDKROOT="${SDKROOT:-$(xcrun --sdk macosx --show-sdk-path)}"
-export MACOSX_DEPLOYMENT_TARGET=14.0
 cargo build --release --locked --target "$rust_target"
 mkdir -p "target/macos/$arch"
-xcrun swiftc -swift-version 5 -warnings-as-errors -sdk "$SDKROOT" \
-  -target "$(uname -m)-apple-macosx14.0" -module-cache-path target/swift-module-cache \
+"$KEEPY_SWIFTC" -swift-version 5 -warnings-as-errors -sdk "$SDKROOT" \
+  -target "$(uname -m)-apple-macosx14.0" -module-cache-path "$KEEPY_SWIFT_MODULE_CACHE" \
   scripts/verify-update.swift -o target/macos/verify-update
 staging=$(mktemp -d "target/macos/$arch/staging.XXXXXX")
 trap 'rm -rf "$staging"' EXIT
 app="$staging/Keepy.app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" "$app/Contents/Frameworks" target/swift-module-cache
 ditto target/sparkle/Sparkle.framework "$app/Contents/Frameworks/Sparkle.framework"
-xcrun swiftc -swift-version 5 -warnings-as-errors -sdk "$SDKROOT" \
-  -target "$(uname -m)-apple-macosx14.0" -module-cache-path target/swift-module-cache \
+"$KEEPY_SWIFTC" -swift-version 5 -warnings-as-errors -sdk "$SDKROOT" \
+  -target "$(uname -m)-apple-macosx14.0" -module-cache-path "$KEEPY_SWIFT_MODULE_CACHE" \
   macos/Sources/Keepy/AppLogo.swift scripts/render-logo.swift -o "$staging/render-logo"
 "$staging/render-logo" "$staging/icons"
-xcrun swiftc -O -swift-version 5 -warnings-as-errors -sdk "$SDKROOT" \
-  -target "$arch-apple-macosx14.0" -module-cache-path target/swift-module-cache \
+"$KEEPY_SWIFTC" -O -swift-version 5 -warnings-as-errors -sdk "$SDKROOT" \
+  -target "$arch-apple-macosx14.0" -module-cache-path "$KEEPY_SWIFT_MODULE_CACHE" \
   -F target/sparkle -framework Sparkle -Xlinker -rpath -Xlinker @executable_path/../Frameworks \
   macos/Sources/Keepy/*.swift -o "$app/Contents/MacOS/keepy"
 cp "target/$rust_target/release/keepy-core" "$app/Contents/MacOS/"
@@ -79,6 +78,8 @@ except OSError:
     raise
 PY_RENAME
 app="$destination"
+codesign --verify --deep --strict "$app"
+python3 scripts/verify-macos-build.py "$app" --arch "$arch" --helper target/macos/verify-update
 echo "Built $app"
 if [[ "${1:-}" == --dmg ]]; then
   version=$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' macos/Info.plist)

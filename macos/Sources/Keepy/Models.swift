@@ -2,6 +2,10 @@ import Foundation
 import SwiftUI
 import AppKit
 
+// SDK 27 also exports a State macro whose plugin is absent from CLT builds.
+// Preserve the stable SwiftUI property wrapper and its macOS 14 behavior.
+typealias ViewState<Value> = SwiftUI.State<Value>
+
 enum TagColor: String, Codable, CaseIterable, Identifiable {
     case red, orange, yellow, green, blue, purple, gray
     var id: String { rawValue }

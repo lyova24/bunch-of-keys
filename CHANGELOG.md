@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.2.8 - 2026-10-17
+
+- Adopt macOS SDK 27 with matching Xcode/Command Line Tools 27, a shared
+  toolchain selector, early Swift/Clang/linker probes and isolated module caches (#56).
+- Pin CI, manual builds and releases to Xcode 27.0 on the xcode-27 runner;
+  consistently use the selected tools for Rust, Swift, native tests and update helpers.
+- Keep SwiftUI state on the existing property wrapper explicitly, avoiding
+  SDK 27's new macro/plugin dependency in Command Line Tools builds.
+- Verify SDK and macOS 14 deployment metadata in both arm64 and x86_64 bundles;
+  preserve runtime availability guards, identity, signing and encrypted formats.
+
 ## 2.2.7 - 2026-10-16
 
 - Add encrypted colored tags on individual credential fields, editable in the

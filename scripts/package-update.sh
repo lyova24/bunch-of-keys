@@ -2,11 +2,13 @@
 # Make a signed Sparkle update, matching release notes and architecture feed.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+source scripts/macos-toolchain.sh
 arch="${KEEPY_ARCH:-$(uname -m)}"
 case "$arch" in arm64|x86_64) ;; *) echo 'Unsupported architecture' >&2; exit 1 ;; esac
 version=$(/usr/libexec/PlistBuddy -c 'Print CFBundleVersion' macos/Info.plist)
 app="target/macos/$arch/Keepy.app"
 codesign --verify --deep --strict "$app"
+python3 scripts/verify-macos-build.py "$app" --arch "$arch" --helper target/macos/verify-update
 [[ "$(lipo -archs "$app/Contents/MacOS/keepy")" == "$arch" ]] || { echo 'Update architecture does not match its feed.' >&2; exit 1; }
 public_key=$(/usr/libexec/PlistBuddy -c 'Print SUPublicEDKey' "$app/Contents/Info.plist")
 [[ -n "$public_key" ]] || { echo 'An update signing public key is required.' >&2; exit 1; }

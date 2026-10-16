@@ -8,7 +8,7 @@
 
 A native macOS application for local, encrypted credential collections.
 Formerly bunch-of-keys; existing vaults migrate automatically to Keepy.
-Current version: **2.2.7**. Requires **macOS 14 Sonoma or later**.
+Current version: **2.2.8**. Requires **macOS 14 Sonoma or later**.
 
 The interface uses SwiftUI and AppKit: a standard Mac window, a compact tree with
 keyboard navigation and drag-and-drop, native menus, file panels, and Settings.
@@ -48,8 +48,8 @@ Download the DMG for Apple Silicon (`arm64`) or Intel (`x86_64`), verify its
 checksum, then drag the app into Applications. See
 [macOS installation](docs/INSTALL_MACOS.md) for unsigned builds and updates.
 
-For a local build, install Rust stable and Xcode 26 or newer (including its
-macOS SDK), then run:
+For a local build, use macOS 26.6+ with Rust stable and Xcode 27.0 (including its
+macOS 27 SDK), or matching Command Line Tools 27, then run:
 
 ```sh
 bash scripts/build-macos.sh

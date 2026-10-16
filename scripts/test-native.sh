@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
+source scripts/macos-toolchain.sh
 arch=$(uname -m)
-export SDKROOT="${SDKROOT:-$(xcrun --sdk macosx --show-sdk-path)}"
 scratch=$(mktemp -d)
 trap 'rm -rf "$scratch"' EXIT
 ssh-keygen -q -t ed25519 -N '' -f "$scratch/test-key"
 ssh-keygen -q -t ed25519 -N 'synthetic-tray-passphrase' -f "$scratch/tray-key"
-xcrun swiftc -swift-version 5 -warnings-as-errors -sdk "$SDKROOT" \
+"$KEEPY_SWIFTC" -swift-version 5 -warnings-as-errors -sdk "$SDKROOT" -target "$arch-apple-macosx14.0" \
   -F target/sparkle -framework Sparkle -Xlinker -rpath -Xlinker "$PWD/target/sparkle" \
-  -module-cache-path target/swift-module-cache \
+  -module-cache-path "$KEEPY_SWIFT_MODULE_CACHE" \
   macos/Sources/Keepy/AppLogo.swift \
   macos/Sources/Keepy/Models.swift macos/Sources/Keepy/CoreClient.swift \
   macos/Sources/Keepy/TouchID.swift macos/Sources/Keepy/VaultManagement.swift \

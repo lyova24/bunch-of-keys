@@ -4,10 +4,10 @@ import AppKit
 struct SSHKeysEditor: View {
     @EnvironmentObject var store: AppStore
     @Environment(\.dismiss) private var dismiss
-    @State private var selection: String?
-    @State private var name = ""
-    @State private var privateKey = ""
-    @State private var deleteKey = false
+    @ViewState private var selection: String?
+    @ViewState private var name = ""
+    @ViewState private var privateKey = ""
+    @ViewState private var deleteKey = false
     var selected: SSHKey? { store.vault?.sshKeys.first { $0.id == selection } }
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {

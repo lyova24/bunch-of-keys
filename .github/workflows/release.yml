@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   package:
-    runs-on: macos-26
+    runs-on: xcode-27
     strategy:
       matrix:
         include:
@@ -27,6 +27,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.tag || github.ref_name }}
+      - uses: ./.github/actions/macos-toolchain
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}

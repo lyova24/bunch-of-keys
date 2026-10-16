@@ -30,10 +30,11 @@ concurrency:
 jobs:
   policy:
     name: Licenses and dependency policy
-    runs-on: macos-26
+    runs-on: xcode-27
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
+      - uses: ./.github/actions/macos-toolchain
       - uses: dtolnay/rust-toolchain@stable
       - uses: taiki-e/install-action@v2
         with:
@@ -43,10 +44,11 @@ jobs:
 
   audit:
     name: RustSec audit
-    runs-on: macos-26
+    runs-on: xcode-27
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
+      - uses: ./.github/actions/macos-toolchain
       - uses: dtolnay/rust-toolchain@stable
       - name: Install cargo-audit
         uses: taiki-e/install-action@v2

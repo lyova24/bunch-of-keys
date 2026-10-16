@@ -1,6 +1,6 @@
 # Installing on macOS
 
-Version 2.2.0 supports macOS 14 Sonoma or later. Liquid Glass requires macOS 26.
+Keepy 2.x supports macOS 14 Sonoma or later. Liquid Glass requires macOS 26.
 Choose arm64 for Apple Silicon (M-series) or x86_64 for Intel (Apple menu →
 About This Mac). Download the matching DMG and SHA-256 file from the package
 workflow artifacts or a release, when available.

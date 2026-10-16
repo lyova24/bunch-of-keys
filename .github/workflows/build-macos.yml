@@ -22,12 +22,13 @@ jobs:
             target: aarch64-apple-darwin
           - arch: x86_64
             target: x86_64-apple-darwin
-    runs-on: macos-26
+    runs-on: xcode-27
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.ref }}
+      - uses: ./.github/actions/macos-toolchain
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}

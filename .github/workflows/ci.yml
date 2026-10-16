@@ -19,15 +19,18 @@ jobs:
             target: aarch64-apple-darwin
           - arch: x86_64
             target: x86_64-apple-darwin
-    runs-on: macos-26
+    runs-on: xcode-27
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
+      - uses: ./.github/actions/macos-toolchain
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy,rustfmt
           targets: ${{ matrix.target }}
       - uses: Swatinem/rust-cache@v2
+      - name: Test toolchain selection and diagnostics
+        run: python3 scripts/test-macos-toolchain.py
       - name: Check synchronized version
         run: bash scripts/check-version-sync.sh
       - name: Validate Touch ID signing profile handling

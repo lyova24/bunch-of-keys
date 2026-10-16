@@ -164,7 +164,7 @@ enum TouchIDError: LocalizedError {
 
 struct TouchIDSettingsView: View {
     @EnvironmentObject var store: AppStore
-    @State private var password = ""
+    @ViewState private var password = ""
     @FocusState private var passwordFocused: Bool
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {

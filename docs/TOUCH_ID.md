@@ -82,7 +82,7 @@ and [Keychain access groups](https://developer.apple.com/documentation/security/
 
 ## Verification
 
-`cargo test --locked` covers password verification, vault binding, malformed keys,
+`bash scripts/with-macos-toolchain.sh cargo test --locked` covers password verification, vault binding, malformed keys,
 payload preservation, password rewrapping, ticket expiry/consumption, lock/switch,
 and restart. `bash scripts/test-native.sh` includes a mock Keychain for enrollment,
 disable, cancellation/failure, unavailable hardware, restart, stale enrollment,

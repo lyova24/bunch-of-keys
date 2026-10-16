@@ -63,9 +63,9 @@ extension AppStore {
 struct TrayTagsEditor: View {
     @EnvironmentObject var store: AppStore
     let vaultID: String
-    @State private var selected = Set<TagColor>()
-    @State private var original = Set<TagColor>()
-    @State private var confirmDiscard = false
+    @ViewState private var selected = Set<TagColor>()
+    @ViewState private var original = Set<TagColor>()
+    @ViewState private var confirmDiscard = false
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Tray Tags").font(.title2.weight(.semibold))
