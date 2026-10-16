@@ -382,7 +382,13 @@ struct FieldRow: View {
     var body: some View {
         HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 3) {
-                Text(field.label).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                HStack(spacing: 5) {
+                    Text(field.label).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    ForEach(field.tags) { tag in
+                        Circle().fill(tag.color).frame(width: 7, height: 7).help(tag.title)
+                            .accessibilityLabel("\(tag.title) tag")
+                    }
+                }
                 if let ssh = field.ssh {
                     Text("\(ssh.user)@\(ssh.address)\(ssh.port.map { ":\($0)" } ?? "")").font(.system(.body, design: .monospaced)).lineLimit(1)
                     Label(ssh.key.name, systemImage: "key").font(.caption).foregroundStyle(.secondary).lineLimit(1)

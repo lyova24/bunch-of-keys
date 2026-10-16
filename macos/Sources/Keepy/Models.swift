@@ -100,6 +100,11 @@ struct VaultNode: Decodable, Identifiable, Equatable {
     }
     private func tagged(_ colors: Set<TagColor>, inheritedMatch: Bool) -> VaultNode? {
         if colors.isEmpty || inheritedMatch || !colors.isDisjoint(with: tags) { return self }
+        if !isGroup {
+            let matching = (fields ?? []).filter { !colors.isDisjoint(with: $0.tags) }
+            guard !matching.isEmpty else { return nil }
+            var node = self; node.fields = matching; return node
+        }
         let children = (children ?? []).compactMap { $0.tagged(colors, inheritedMatch: false) }
         if children.isEmpty { return nil }
         var node = self; node.children = children; return node
@@ -138,6 +143,18 @@ struct VaultField: Decodable, Identifiable, Equatable {
     var masked: Bool
     var value: String?
     var ssh: SSHConnection?
+    var tags: [TagColor] = []
+    init(id: String, label: String, kind: String, masked: Bool, value: String? = nil, ssh: SSHConnection? = nil, tags: [TagColor] = []) {
+        self.id = id; self.label = label; self.kind = kind; self.masked = masked; self.value = value; self.ssh = ssh; self.tags = tags
+    }
+    private enum CodingKeys: String, CodingKey { case id, label, kind, masked, value, ssh, tags }
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        id = try values.decode(String.self, forKey: .id); label = try values.decode(String.self, forKey: .label)
+        kind = try values.decode(String.self, forKey: .kind); masked = try values.decode(Bool.self, forKey: .masked)
+        value = try values.decodeIfPresent(String.self, forKey: .value); ssh = try values.decodeIfPresent(SSHConnection.self, forKey: .ssh)
+        tags = try values.decodeIfPresent([TagColor].self, forKey: .tags) ?? []
+    }
 }
 struct FieldDraft: Identifiable, Equatable {
     var id = UUID().uuidString.lowercased()
@@ -149,8 +166,9 @@ struct FieldDraft: Identifiable, Equatable {
     var address = ""
     var port = ""
     var keyId = ""
+    var tags = Set<TagColor>()
     var payload: [String: Any] {
-        var result: [String: Any] = ["id": id, "label": label, "kind": kind, "value": value, "masked": masked]
+        var result: [String: Any] = ["id": id, "label": label, "kind": kind, "value": value, "masked": masked, "tags": TagColor.allCases.filter { tags.contains($0) }.map(\.rawValue)]
         if kind == "ssh" {
             var ssh: [String: Any] = ["user": user, "address": address, "key_id": keyId]
             if !port.isEmpty { ssh["port"] = Int(port) ?? 0 }
@@ -160,8 +178,22 @@ struct FieldDraft: Identifiable, Equatable {
     }
     init() {}
     init(_ field: VaultField) {
+        tags = Set(field.tags)
         id = field.id; label = field.label; kind = field.kind; value = field.value ?? ""; masked = field.masked
         user = field.ssh?.user ?? ""; address = field.ssh?.address ?? ""
         port = field.ssh?.port.map(String.init) ?? ""; keyId = field.ssh?.key.id ?? ""
     }
+}
+
+enum CredentialAction: String {
+    case copy, openURL, connectSSH
+    var title: String {
+        switch self { case .copy: return "Copy"; case .openURL: return "Open URL"; case .connectSSH: return "Connect in Terminal" }
+    }
+    var symbol: String {
+        switch self { case .copy: return "doc.on.doc"; case .openURL: return "arrow.up.right.square"; case .connectSSH: return "terminal" }
+    }
+}
+extension VaultField {
+    var action: CredentialAction { kind == "url" ? .openURL : kind == "ssh" ? .connectSSH : .copy }
 }

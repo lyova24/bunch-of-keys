@@ -27,7 +27,6 @@ struct EditorRoute: Identifiable {
         }
     }
     @Published var selection: String?
-    @Published var entryNavigation: EntryNavigationRequest?
     @Published var search = ""
     @Published var tagFilter = Set<TagColor>()
     @Published var revealed: [String: String] = [:]
@@ -54,8 +53,9 @@ struct EditorRoute: Identifiable {
     let core: CoreClient
     private let pasteboard: NSPasteboard
     let biometricKeychain: BiometricKeychain
-    init(core: CoreClient = CoreClient(), pasteboard: NSPasteboard = .general, biometricKeychain: BiometricKeychain? = nil) {
-        self.core = core; self.pasteboard = pasteboard
+    private let openExternalURL: (URL) -> Bool
+    init(core: CoreClient = CoreClient(), pasteboard: NSPasteboard = .general, biometricKeychain: BiometricKeychain? = nil, openExternalURL: @escaping (URL) -> Bool = { NSWorkspace.shared.open($0) }) {
+        self.core = core; self.pasteboard = pasteboard; self.openExternalURL = openExternalURL
         self.biometricKeychain = biometricKeychain ?? SystemBiometricKeychain()
     }
     private var epoch = 0
@@ -121,7 +121,7 @@ struct EditorRoute: Identifiable {
     }
     func clearSession() {
         biometricKeychain.cancel(); showingTouchIDSetup = false
-        vault = nil; selection = nil; entryNavigation = nil; clearFilters(); revealed.removeAll(); activeSSH.removeAll()
+        vault = nil; selection = nil; clearFilters(); revealed.removeAll(); activeSSH.removeAll()
         editor = nil; showingKeys = false; sshPrompt = nil; deleteTarget = nil; notice = nil
         clearClipboard()
     }
@@ -194,6 +194,16 @@ struct EditorRoute: Identifiable {
         if tags.contains(tag) { tags.remove(tag) } else { tags.insert(tag) }
         Task { await setTags(TagColor.allCases.filter { tags.contains($0) }, for: current) }
     }
+    @discardableResult func setFieldTags(_ tags: [TagColor], entry: String, field: String) async -> Bool {
+        guard canManageVault, vault?.node(entry)?.fields?.contains(where: { $0.id == field }) == true else { return false }
+        return await mutate("set_field_tags", ["entry_id": entry, "field_id": field, "tags": TagColor.allCases.filter { tags.contains($0) }.map(\.rawValue)])
+    }
+    func toggleFieldTag(_ tag: TagColor, entry: String, field: String) {
+        guard canManageVault, let current = vault?.node(entry)?.fields?.first(where: { $0.id == field }) else { return }
+        var tags = Set(current.tags)
+        if tags.contains(tag) { tags.remove(tag) } else { tags.insert(tag) }
+        Task { await setFieldTags(TagColor.allCases.filter { tags.contains($0) }, entry: entry, field: field) }
+    }
     func selectCreatedNode(parent: String?, index: Int?) {
         let children = parent.flatMap { vault?.node($0)?.children } ?? vault?.nodes ?? []
         if let index, children.indices.contains(index) { selection = children[index].id }
@@ -221,21 +231,27 @@ struct EditorRoute: Identifiable {
     }
     func copy(entry: String, field: String) {
         let generation = epoch
-        Task {
-            do {
-                let value = try await fieldString("copy_field", entry: entry, field: field)
-                guard generation == epoch, vault != nil else { return }
-                clipboardTask?.cancel()
-                let pasteboard = self.pasteboard
-                pasteboard.clearContents(); pasteboard.setString(value, forType: .string)
-                clipboardChange = pasteboard.changeCount; notice = "Copied"
-                let seconds = settings.clipboardClearSeconds
-                clipboardTask = Task { [weak self] in
-                    do { try await Task.sleep(for: .seconds(seconds)) } catch { return }
-                    self?.clearClipboard()
-                }
-                Task { try? await Task.sleep(for: .seconds(2)); if notice == "Copied" { notice = nil } }
-            } catch { fail(error) }
+        Task { if generation == epoch { _ = await copyCredential(entry: entry, field: field) } }
+    }
+    private func copyCredential(entry: String, field: String) async -> Bool {
+        let generation = epoch
+        do {
+            let value = try await fieldString("copy_field", entry: entry, field: field)
+            guard generation == epoch, vault != nil else { return false }
+            clipboardTask?.cancel()
+            let pasteboard = self.pasteboard
+            pasteboard.clearContents(); pasteboard.setString(value, forType: .string)
+            clipboardChange = pasteboard.changeCount; notice = "Copied"
+            let seconds = settings.clipboardClearSeconds
+            clipboardTask = Task { [weak self] in
+                do { try await Task.sleep(for: .seconds(seconds)) } catch { return }
+                self?.clearClipboard()
+            }
+            Task { try? await Task.sleep(for: .seconds(2)); if generation == epoch, notice == "Copied" { notice = nil } }
+            return true
+        } catch {
+            guard generation == epoch else { return false }
+            fail(error); return false
         }
     }
     func clearClipboard() {
@@ -245,12 +261,27 @@ struct EditorRoute: Identifiable {
     }
     func openURL(entry: String, field: String) {
         let generation = epoch
-        Task {
-            do {
-                let string = try await fieldString("open_url", entry: entry, field: field)
-                guard generation == epoch, let url = URL(string: string), ["https", "http"].contains(url.scheme), url.host != nil else { return }
-                if !NSWorkspace.shared.open(url) { throw CoreError(message: "The system browser could not be opened.") }
-            } catch { fail(error) }
+        Task { if generation == epoch { _ = await openCredentialURL(entry: entry, field: field) } }
+    }
+    private func openCredentialURL(entry: String, field: String) async -> Bool {
+        let generation = epoch
+        do {
+            let string = try await fieldString("open_url", entry: entry, field: field)
+            guard generation == epoch, vault != nil, let url = URL(string: string), ["https", "http"].contains(url.scheme), url.host != nil else { return false }
+            if !openExternalURL(url) { throw CoreError(message: "The system browser could not be opened.") }
+            return true
+        } catch {
+            guard generation == epoch else { return false }
+            fail(error); return false
+        }
+    }
+    @discardableResult func performFieldAction(entry: String, field: String) async -> Bool {
+        guard canManageVault, error == nil, let current = vault?.node(entry)?.fields?.first(where: { $0.id == field }) else { return false }
+        touch()
+        switch current.action {
+        case .copy: return await copyCredential(entry: entry, field: field)
+        case .openURL: return await openCredentialURL(entry: entry, field: field)
+        case .connectSSH: return await connect(entry: entry, field: field)
         }
     }
     func connect(entry: String, field: String, passphrase: String? = nil) async -> Bool {
@@ -261,9 +292,11 @@ struct EditorRoute: Identifiable {
             var args: [String: Any] = ["entry_id": entry, "field_id": field]
             if let passphrase { args["passphrase"] = passphrase }
             _ = try await core.request("connect_ssh", args)
-            if epoch == generation { activeSSH.insert(field); sshPrompt = nil }
+            guard epoch == generation, vault != nil else { return false }
+            activeSSH.insert(field); sshPrompt = nil
             return true
         } catch {
+            guard epoch == generation, vault != nil else { return false }
             activeSSH.remove(field)
             if error.localizedDescription == "SSH key passphrase is required" { sshPrompt = (entry, field) }
             else { fail(error) }

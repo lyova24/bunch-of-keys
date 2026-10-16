@@ -1,30 +1,37 @@
 import SwiftUI
 import AppKit
 
-struct EntryNavigationRequest {
+struct CredentialTarget: Hashable {
+    let vaultID: String
     let entryID: String
-    let token = UUID()
+    let fieldID: String
 }
-struct TrayEntry: Equatable, Identifiable {
-    let id: String
+struct TrayCredential: Equatable, Identifiable {
+    let id: CredentialTarget
     let name: String
+    let label: String
     let path: String
-    var title: String {
-        let full = path.isEmpty ? name : "\(name) — \(path)"
-        return full.count > 100 ? String(full.prefix(99)) + "…" : full
-    }
+    let action: CredentialAction
+    var fullTitle: String { "\(name) › \(label)" + (path.isEmpty ? "" : " — \(path)") }
+    var title: String { fullTitle.count > 100 ? String(fullTitle.prefix(99)) + "…" : fullTitle }
 }
 extension Vault {
-    var trayEntries: [TrayEntry] {
+    var trayCredentials: [TrayCredential] {
         let enabled = Set(trayTags)
         guard !enabled.isEmpty else { return [] }
-        var result: [TrayEntry] = [], seen = Set<String>()
+        var result: [TrayCredential] = [], seen = Set<CredentialTarget>()
         func visit(_ nodes: [VaultNode], ancestors: [String], inherited: Bool) {
             for node in nodes {
                 let matches = inherited || !enabled.isDisjoint(with: node.tags)
                 if node.isGroup { visit(node.children ?? [], ancestors: ancestors + [node.name], inherited: matches) }
-                else if matches, seen.insert(node.id).inserted {
-                    result.append(TrayEntry(id: node.id, name: node.name, path: ancestors.joined(separator: " › ")))
+                else {
+                    for field in node.fields ?? [] where matches || !enabled.isDisjoint(with: field.tags) {
+                        let target = CredentialTarget(vaultID: id, entryID: node.id, fieldID: field.id)
+                        if seen.insert(target).inserted {
+                            result.append(TrayCredential(id: target, name: node.name, label: field.label,
+                                path: ancestors.joined(separator: " › "), action: field.action))
+                        }
+                    }
                 }
             }
         }
@@ -33,17 +40,16 @@ extension Vault {
     }
 }
 extension AppStore {
-    var canOpenTrayEntries: Bool { canManageVault && error == nil }
+    var canUseTrayCredentials: Bool { canManageVault && error == nil }
     func manageTrayTags() {
         guard canManageVault, let id = vault?.id else { return }
         error = nil
         editor = EditorRoute(kind: .trayTags(id))
     }
-    @discardableResult func selectTrayEntry(_ id: String) -> Bool {
-        guard canOpenTrayEntries, vault?.trayEntries.contains(where: { $0.id == id }) == true else { return false }
-        clearFilters(); selection = id
-        entryNavigation = EntryNavigationRequest(entryID: id)
-        return true
+    @discardableResult func activateTrayCredential(_ target: CredentialTarget) async -> Bool {
+        guard canUseTrayCredentials, vault?.id == target.vaultID,
+              vault?.trayCredentials.contains(where: { $0.id == target }) == true else { return false }
+        return await performFieldAction(entry: target.entryID, field: target.fieldID)
     }
     func saveTrayTags(_ colors: Set<TagColor>, vaultID: String) async -> Bool {
         guard vault?.id == vaultID, serviceAvailable, !busy, !showingKeys, !showingTouchIDSetup,
@@ -63,7 +69,7 @@ struct TrayTagsEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Tray Tags").font(.title2.weight(.semibold))
-            Text("Choose which tags show credentials in the menu bar for this vault. Entries inside tagged groups are included.")
+            Text("Choose which tags show credentials in the menu bar for this vault. Fields inside tagged entries and groups are included.")
                 .font(.callout).foregroundStyle(.secondary)
             HStack { Text("Tag"); Spacer(); Text("Show in tray") }.font(.caption).foregroundStyle(.secondary)
             ForEach(TagColor.allCases) { tag in
@@ -76,7 +82,7 @@ struct TrayTagsEditor: View {
                     })).labelsHidden().toggleStyle(.switch).accessibilityLabel("\(tag.title): Show in tray")
                 }
             }
-            Text("Only unlocked vaults show credentials. Selecting a credential opens it in Keepy; open editors must be finished first.")
+            Text("Only unlocked vaults show credentials. Selecting a credential copies it, opens its URL, or connects via SSH, just like Return in Keepy. Finish open editors first.")
                 .font(.caption).foregroundStyle(.secondary)
             EditorError()
             HStack {

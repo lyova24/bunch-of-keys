@@ -45,6 +45,7 @@ pub struct EntryView {
 
 #[derive(Debug, Serialize)]
 pub struct FieldView {
+    pub tags: Vec<TagColor>,
     pub id: Uuid,
     pub label: String,
     pub kind: FieldKind,
@@ -120,6 +121,7 @@ impl FieldView {
         Self {
             id: field.id,
             label: field.label.clone(),
+            tags: field.tags.clone(),
             kind: field.kind,
             masked: field.masked,
             value: (!field.masked && field.kind != FieldKind::Ssh).then(|| field.value.clone()),

@@ -6,6 +6,7 @@ export SDKROOT="${SDKROOT:-$(xcrun --sdk macosx --show-sdk-path)}"
 scratch=$(mktemp -d)
 trap 'rm -rf "$scratch"' EXIT
 ssh-keygen -q -t ed25519 -N '' -f "$scratch/test-key"
+ssh-keygen -q -t ed25519 -N 'synthetic-tray-passphrase' -f "$scratch/tray-key"
 xcrun swiftc -swift-version 5 -warnings-as-errors -sdk "$SDKROOT" \
   -F target/sparkle -framework Sparkle -Xlinker -rpath -Xlinker "$PWD/target/sparkle" \
   -module-cache-path target/swift-module-cache \
@@ -25,7 +26,7 @@ xcrun swiftc -swift-version 5 -warnings-as-errors -sdk "$SDKROOT" \
   macos/Tests/NativeTrayShortcut.swift macos/Tests/NativeVaultManagement.swift macos/Tests/NativeTrayTags.swift \
   macos/Tests/Integration.swift -o "$scratch/integration"
 KEEPY_DATA_DIR="$scratch/data" "$scratch/integration" \
-  "$PWD/target/macos/$arch/Keepy.app/Contents/MacOS/keepy-core" "$scratch/test-key" | tee "$scratch/native-output.log"
+  "$PWD/target/macos/$arch/Keepy.app/Contents/MacOS/keepy-core" "$scratch/test-key" "$scratch/tray-key" | tee "$scratch/native-output.log"
 if ! grep -q '^Native pipe integration passed:' "$scratch/native-output.log"; then
   printf '%s\n' 'Native tests exited before completing integration.' >&2
   exit 1

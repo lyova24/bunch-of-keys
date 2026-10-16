@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.2.7 - 2026-10-16
+
+- Add encrypted colored tags on individual credential fields, editable in the
+  entry form and field context menu, with field tag indicators and filtering (#58).
+- List matching fields in the tray with entry names and group paths; inherit
+  entry/group tags and deduplicate matches.
+- Perform the same copy, URL or SSH action as Return in the main tree, without
+  opening the workspace for successful background actions. Preserve clipboard
+  clearing, SSH passphrase prompts, editor guards and stale-action protection.
+
 ## 2.2.6 - 2026-10-16
 
 - Add per-vault Show in tray preferences for each colored tag, disabled by

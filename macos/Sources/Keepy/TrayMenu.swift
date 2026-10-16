@@ -13,7 +13,7 @@ import SwiftUI
     private struct MenuState: Equatable {
         var vaultID: String?
         var name: String
-        var entries: [TrayEntry]
+        var credentials: [TrayCredential]
         var configured: Bool
         var canOpen: Bool
         var canManage: Bool
@@ -73,8 +73,8 @@ import SwiftUI
         guard let store else { return }
         let next = MenuState(vaultID: vault?.id,
             name: vault == nil ? "Vault locked" : store.vaults.first(where: { $0.id == vault?.id })?.name ?? "Vault",
-            entries: vault?.trayEntries ?? [], configured: vault?.trayTags.isEmpty == false,
-            canOpen: store.canOpenTrayEntries, canManage: store.canManageVault)
+            credentials: vault?.trayCredentials ?? [], configured: vault?.trayTags.isEmpty == false,
+            canOpen: store.canUseTrayCredentials, canManage: store.canManageVault)
         guard force || state != next else { return }
         state = next
         menu.removeAllItems()
@@ -84,14 +84,14 @@ import SwiftUI
         menu.addItem(.separator())
         if vault != nil {
             add("Tagged Credentials", enabled: false)
-            if next.entries.isEmpty {
+            if next.credentials.isEmpty {
                 add(next.configured ? "No credentials match the selected tags." : "Choose tags to show credentials here.", enabled: false)
             }
-            for entry in next.entries {
-                let item = NSMenuItem(title: entry.title, action: #selector(openEntry(_:)), keyEquivalent: "")
-                item.target = self; item.representedObject = entry.id; item.isEnabled = next.canOpen
-                item.toolTip = entry.path.isEmpty ? entry.name : "\(entry.path) › \(entry.name)"
-                item.image = NSImage(systemSymbolName: "key.horizontal", accessibilityDescription: nil)
+            for credential in next.credentials {
+                let item = NSMenuItem(title: credential.title, action: #selector(activateCredential(_:)), keyEquivalent: "")
+                item.target = self; item.representedObject = credential.id; item.isEnabled = next.canOpen
+                item.toolTip = "\(credential.action.title): \(credential.fullTitle)"
+                item.image = NSImage(systemSymbolName: credential.action.symbol, accessibilityDescription: nil)
                 menu.addItem(item)
             }
             add("Tray Tags…", action: #selector(configureTrayTags), enabled: next.canManage)
@@ -100,9 +100,14 @@ import SwiftUI
         add("Settings…", action: #selector(showSettings))
         add("Quit Keepy", action: #selector(quit), key: "q")
     }
-    @objc private func openEntry(_ sender: NSMenuItem) {
-        guard let id = sender.representedObject as? String, store?.selectTrayEntry(id) == true else { return }
-        showWorkspace()
+    @objc private func activateCredential(_ sender: NSMenuItem) {
+        guard let target = sender.representedObject as? CredentialTarget, let store else { return }
+        Task {
+            await store.activateTrayCredential(target)
+            // Copy and URL actions stay in the background. SSH passphrases and
+            // actionable errors need the existing main-window UI.
+            if store.vault?.id == target.vaultID, store.sshPrompt != nil || store.error != nil { showWorkspace() }
+        }
     }
     @objc private func configureTrayTags() {
         guard store?.canManageVault == true else { return }

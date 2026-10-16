@@ -470,6 +470,7 @@ mod tests {
             None,
             "Example",
             vec![FieldInput {
+                tags: None,
                 id: None,
                 label: "Password".to_owned(),
                 value: "not-a-real-password".to_owned(),

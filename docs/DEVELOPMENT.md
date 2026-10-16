@@ -50,7 +50,7 @@ legacy decoding and filtering, YAML import, SSH key references, preferences,
 vault renaming and master password changes, and persistence after a full process
 restart. Vault management tests also cover failed writes, old-password rejection,
 Touch ID invalidation and late responses after locking. Tray tests cover encrypted
-per-vault preferences, inherited tags, deduplication, menu actions, tree reveal,
+per-vault preferences, inherited and field tags, deduplication, copy/URL/SSH actions,
 editor guards, live menu refresh and empty/locked states. Native store tests verify tag
 filter cleanup, clipboard ownership, clearing on lock, and protection from
 late reveal responses on a private test pasteboard.
@@ -105,3 +105,8 @@ target/render-logo icons
 ```
 
 The menu bar uses a monochrome template to adapt to the system appearance.
+
+Field tray-action coverage uses a private pasteboard, an injected URL opener and
+an encrypted synthetic SSH key (stopping at the passphrase prompt). It verifies
+field-tag editor payloads/context menus, inherited matching, Return parity,
+clipboard expiry and stale menu targets without launching a browser or Terminal.

@@ -99,6 +99,7 @@ fn field_from_value(label: String, value: &Value) -> CredentialField {
     };
 
     CredentialField {
+        tags: Vec::new(),
         id: Uuid::new_v4(),
         label,
         value,

@@ -183,7 +183,6 @@ struct VaultOutline: NSViewRepresentable {
         var tagExpanded = Set<String>()
         var updating = false
         var didFocus = false
-        var handledEntryNavigation: UUID?
         private var focusScheduled = false
         var contextItem: OutlineNode?
         init(_ store: AppStore) { self.store = store }
@@ -289,20 +288,6 @@ struct VaultOutline: NSViewRepresentable {
                     let row = outline.row(forItem: item)
                     if row >= 0 { outline.scrollRowToVisible(row) }
                 }
-            }
-            if let request = store.entryNavigation, request.token != handledEntryNavigation,
-               let item = boxes[request.entryID] {
-                var ancestors: [String] = []
-                var parent = store.vault?.parent(of: request.entryID)
-                while let id = parent { ancestors.append(id); parent = store.vault?.parent(of: id) }
-                for id in ancestors.reversed() {
-                    expanded.insert(id)
-                    if let ancestor = boxes[id] { outline.expandItem(ancestor) }
-                }
-                expanded.insert(item.id); outline.expandItem(item)
-                handledEntryNavigation = request.token
-                let row = outline.row(forItem: item)
-                if row >= 0 { outline.scrollRowToVisible(row) }
             }
             var fieldRows = IndexSet()
             for row in 0..<outline.numberOfRows where (outline.item(atRow: row) as? OutlineNode)?.field != nil { fieldRows.insert(row) }
@@ -442,9 +427,7 @@ struct VaultOutline: NSViewRepresentable {
             }
         }
         func performFieldAction(_ field: VaultField, entry: String) {
-            if field.kind == "url" { store.openURL(entry: entry, field: field.id) }
-            else if field.kind == "ssh" { Task { await store.connect(entry: entry, field: field.id) } }
-            else { store.copy(entry: entry, field: field.id) }
+            Task { await store.performFieldAction(entry: entry, field: field.id) }
         }
         @objc func remove() {
             guard store.editor == nil, !store.busy else { return }
@@ -459,13 +442,15 @@ struct VaultOutline: NSViewRepresentable {
         @objc func revealField() { if let item = contextItem, let field = item.field, let entry = item.entryId { store.reveal(entry: entry, field: field.id) } }
         @objc func openField() { if let item = contextItem, let field = item.field, let entry = item.entryId { performFieldAction(field, entry: entry) } }
         @objc func toggleTag(_ sender: NSMenuItem) {
-            guard !store.busy, store.editor == nil, let node = contextItem?.node,
+            guard !store.busy, store.editor == nil, let item = contextItem,
                   let value = sender.representedObject as? String, let tag = TagColor(rawValue: value) else { return }
-            store.toggleTag(tag, for: node)
+            if let field = item.field, let entry = item.entryId { store.toggleFieldTag(tag, entry: entry, field: field.id) }
+            else if let node = item.node { store.toggleTag(tag, for: node) }
         }
         @objc func removeTags() {
-            guard !store.busy, store.editor == nil, let node = contextItem?.node else { return }
-            Task { await store.setTags([], for: node) }
+            guard !store.busy, store.editor == nil, let item = contextItem else { return }
+            if let field = item.field, let entry = item.entryId { Task { await store.setFieldTags([], entry: entry, field: field.id) } }
+            else if let node = item.node { Task { await store.setTags([], for: node) } }
         }
         func menuNeedsUpdate(_ menu: NSMenu) {
             guard let outline else { return }
@@ -487,7 +472,8 @@ struct VaultOutline: NSViewRepresentable {
                 menu.addItem(.separator())
             }
             add("Edit…", #selector(editNode))
-            if let node = item.node {
+            if item.node != nil || item.field != nil {
+                let tags = item.node?.tags ?? item.field?.tags ?? []
                 let tagsItem = NSMenuItem(title: "Tags", action: nil, keyEquivalent: "")
                 tagsItem.image = NSImage(systemSymbolName: "tag", accessibilityDescription: "Tags")
                 tagsItem.isEnabled = !store.busy && store.editor == nil
@@ -495,16 +481,16 @@ struct VaultOutline: NSViewRepresentable {
                 for tag in TagColor.allCases {
                     let tagItem = NSMenuItem(title: tag.title, action: #selector(toggleTag(_:)), keyEquivalent: "")
                     tagItem.target = self; tagItem.representedObject = tag.rawValue; tagItem.image = tag.menuImage
-                    tagItem.state = node.tags.contains(tag) ? .on : .off
+                    tagItem.state = tags.contains(tag) ? .on : .off
                     tagItem.isEnabled = !store.busy && store.editor == nil
                     tagsMenu.addItem(tagItem)
                 }
                 tagsMenu.addItem(.separator())
                 let clearItem = NSMenuItem(title: "Remove All Tags", action: #selector(removeTags), keyEquivalent: "")
-                clearItem.target = self; clearItem.isEnabled = !node.tags.isEmpty && !store.busy && store.editor == nil
+                clearItem.target = self; clearItem.isEnabled = !tags.isEmpty && !store.busy && store.editor == nil
                 tagsMenu.addItem(clearItem); tagsItem.submenu = tagsMenu; menu.addItem(tagsItem)
                 menu.addItem(.separator())
-                add("Delete…", #selector(remove))
+                if item.node != nil { add("Delete…", #selector(remove)) }
             }
         }
         func outlineView(_ outlineView: NSOutlineView, pasteboardWriterForItem item: Any) -> NSPasteboardWriting? {

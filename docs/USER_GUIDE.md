@@ -61,8 +61,8 @@ and release checks.
 
 *Expand an entry to see its fields in the same tree as its parent groups.*
 
-Groups and entries can carry several colored tags: Red, Orange, Yellow, Green,
-Blue, Purple, and Gray. Tags appear next to each item's name and stay with the
+Groups, entries, and individual fields can carry several colored tags: Red, Orange, Yellow, Green,
+Blue, Purple, and Gray. Tags appear next to each item's name or field label and stay with the
 item after renaming, editing, or moving it. Tags are stored inside the encrypted
 vault; existing items start with no tags.
 
@@ -72,8 +72,8 @@ color immediately or choose Remove All Tags.
 
 Open Filter by Tags beside the search field and select one or more colors. An
 item matches if it has any selected color. A tagged group includes its
-descendants, while parent groups remain visible to preserve the location of
-matching entries. Press Shift-Tab from the search field or vault tree to open
+descendants; an entry tag includes all its fields. Direct field matches keep
+only those fields, while parent entries and groups preserve their location. Press Shift-Tab from the search field or vault tree to open
 the filter using the keyboard. Use the arrow keys to move between colors and
 Return to toggle the highlighted color; the popover stays open for selecting
 several tags. Tab and Shift-Tab also navigate the palette. When filters are
@@ -140,11 +140,23 @@ bar menu. Each color has its own **Show in tray** switch; all start disabled.
 Save your selection to this vault. The settings are encrypted with the vault,
 persist after restart, and are independent of the current search/tag filter.
 
-The menu bar lists entries matching any enabled color, including every entry
-inside a group with that color. An entry matching several colors appears once.
-Group paths distinguish entries with the same name. Selecting an entry opens
-Keepy, clears temporary filters, expands its ancestors and selects the entry.
-Finish open editors and unsaved Settings before selecting another credential.
+You can tag a specific field, such as Password, without tagging its Username
+neighbor. Use the **Tags** picker inside each field in the entry editor, or
+right-click the field in the tree and choose **Tags**. Colored dots beside the
+field label show its direct tags. The tag filter also finds individual fields.
+Existing vaults start with no field tags; editing or reordering preserves them.
+
+The menu bar lists individual fields matching any enabled color. Tags on an
+entry include all of its fields; tags on a group include every field below it.
+A field matching several colors appears once. Entry names, field labels and
+group paths identify each item; credential values never appear in the menu.
+
+Selecting a field performs the same action as **Return** in the main tree:
+text and secrets copy to the clipboard, URLs open in the browser, and SSH fields
+connect in Terminal. Successful actions leave the Keepy window and its selection
+unchanged. Copying retains automatic clipboard clearing. An encrypted SSH key
+opens Keepy's existing passphrase prompt; errors also bring the window forward.
+Finish open editors and unsaved Settings before using tray actions.
 
 The list updates when tags or their tray settings change. It explains when no
 colors are enabled or no credentials match. Locking removes all credential names

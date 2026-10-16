@@ -778,6 +778,7 @@ mod tests {
                     None,
                     "Example service",
                     vec![FieldInput {
+                        tags: None,
                         id: None,
                         label: "Token".to_owned(),
                         value: "synthetic-test-value".to_owned(),

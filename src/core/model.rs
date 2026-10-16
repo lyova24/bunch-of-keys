@@ -139,6 +139,8 @@ pub enum TagColor {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CredentialField {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tags: Vec<TagColor>,
     pub id: Uuid,
     pub label: String,
     pub value: String,
@@ -160,6 +162,8 @@ pub enum FieldKind {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct FieldInput {
+    #[serde(default)]
+    pub tags: Option<Vec<TagColor>>,
     #[serde(default)]
     pub id: Option<Uuid>,
     pub label: String,
@@ -306,6 +310,15 @@ impl VaultData {
         tags: Option<Vec<TagColor>>,
     ) -> Result<(), ModelError> {
         let name = validated_name(name)?;
+        let mut fields = fields;
+        for field in &mut fields {
+            if field.tags.is_none() {
+                field.tags = field
+                    .id
+                    .and_then(|id| self.field(entry_id, id))
+                    .map(|field| field.tags.clone());
+            }
+        }
         let fields = validated_fields(fields, &self.ssh_keys)?;
         if let Some(tags) = &tags {
             validate_tags(tags)?;
@@ -365,6 +378,23 @@ impl VaultData {
         validate_tags(&tags)?;
         let node = find_node_mut(&mut self.nodes, node_id).ok_or(ModelError::NodeNotFound)?;
         node.set_tags(tags);
+        Ok(())
+    }
+
+    pub fn set_field_tags(
+        &mut self,
+        entry_id: Uuid,
+        field_id: Uuid,
+        tags: Vec<TagColor>,
+    ) -> Result<(), ModelError> {
+        validate_tags(&tags)?;
+        let entry = find_entry_mut(&mut self.nodes, entry_id).ok_or(ModelError::EntryNotFound)?;
+        let field = entry
+            .fields
+            .iter_mut()
+            .find(|field| field.id == field_id)
+            .ok_or(ModelError::FieldNotFound)?;
+        field.tags = tags;
         Ok(())
     }
 
@@ -571,6 +601,8 @@ fn validated_fields(
 
     let mut result = Vec::with_capacity(fields.len());
     for input in fields {
+        let tags = input.tags.unwrap_or_default();
+        validate_tags(&tags)?;
         let label = input.label.trim();
         if label.is_empty() {
             return Err(ModelError::EmptyFieldLabel);
@@ -603,6 +635,7 @@ fn validated_fields(
             return Err(ModelError::DuplicateFieldId);
         }
         result.push(CredentialField {
+            tags,
             id,
             label: label.to_owned(),
             value: if input.kind == FieldKind::Ssh {
@@ -828,6 +861,7 @@ fn validate_nodes(nodes: &[Node], ssh_keys: &[SshKey]) -> Result<(), ModelError>
                     .iter()
                     .cloned()
                     .map(|field| FieldInput {
+                        tags: Some(field.tags.clone()),
                         id: Some(field.id),
                         label: field.label,
                         value: field.value,
@@ -954,6 +988,7 @@ mod tests {
 
     fn field(label: &str, value: &str, masked: bool) -> FieldInput {
         FieldInput {
+            tags: None,
             id: None,
             label: label.to_owned(),
             value: value.to_owned(),
@@ -989,6 +1024,7 @@ mod tests {
                 entry_id,
                 "Renamed server",
                 vec![FieldInput {
+                    tags: None,
                     id: Some(original_field.id),
                     label: original_field.label.clone(),
                     value: original_field.value.clone(),
@@ -1155,6 +1191,7 @@ mod tests {
 
     fn ssh_field(label: &str, key_id: Uuid) -> FieldInput {
         FieldInput {
+            tags: None,
             id: None,
             label: label.to_owned(),
             value: String::new(),
@@ -1372,6 +1409,7 @@ mod tests {
             .iter()
             .rev()
             .map(|field| FieldInput {
+                tags: Some(field.tags.clone()),
                 id: Some(field.id),
                 label: field.label.clone(),
                 value: field.value.clone(),

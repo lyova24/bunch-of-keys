@@ -126,8 +126,15 @@ match; native password forms clear when dismissed or the session changes.
 
 Per-vault `tray_tags` is an optional array in the encrypted payload (empty for
 older vaults); public vault summaries and the plaintext registry do not contain
-it. The native menu derives a deduplicated entry list using inherited group tags.
+it. Fields also have optional encrypted `tags`; legacy fields default to empty.
+Field update inputs may omit tags to preserve them by field UUID, while an
+explicit empty list clears them. Dedicated tag mutations never fetch secrets.
+The native menu derives deduplicated field targets from direct tags and inherited
+entry/group tags, retaining only vault/entry/field IDs and display metadata.
 Only changed menu snapshots are rendered, preserving keyboard navigation during
 background refresh. Locking cancels tracking and removes credential menu items.
-Tray navigation carries a fresh token so the outline reveals and selects the
-requested entry once without reopening it on later refreshes.
+Tray targets are revalidated against the current vault and tag eligibility before
+using the same action dispatcher as Return in the outline. Clipboard, URL and
+SSH responses check the session generation before publishing effects. Successful
+background actions do not navigate or open the workspace; errors and encrypted
+SSH passphrase requests use the existing window UI.

@@ -181,6 +181,7 @@ struct FieldEditor: View {
                     .onChange(of: field.kind) { _, kind in if kind == "secret" { field.masked = true }; if kind == "ssh" { field.keyId = store.vault?.sshKeys.first?.id ?? "" } }
                 Button { NotificationCenter.default.post(name: .init("RemoveDraftField"), object: field.id) } label: { Image(systemName: "trash") }.buttonStyle(.borderless).help("Remove field").accessibilityLabel("Remove field")
             }
+            TagPicker(selection: $field.tags)
             if field.kind == "ssh" {
                 HStack { TextField("User", text: $field.user); TextField("Host", text: $field.address); TextField("Port", text: $field.port).frame(width: 65) }.textFieldStyle(.roundedBorder)
                 Picker("SSH Key", selection: $field.keyId) {

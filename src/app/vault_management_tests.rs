@@ -101,6 +101,7 @@ fn populate_vault(state: &AppState) {
                 "Credential",
                 vec![
                     FieldInput {
+                        tags: Some(vec![crate::core::TagColor::Red]),
                         id: Some(field),
                         label: "Secret".into(),
                         value: "synthetic-secret".into(),
@@ -109,6 +110,7 @@ fn populate_vault(state: &AppState) {
                         ssh: None,
                     },
                     FieldInput {
+                        tags: None,
                         id: None,
                         label: "SSH".into(),
                         value: String::new(),

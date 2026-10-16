@@ -87,6 +87,11 @@ enum Command {
         node_id: Uuid,
         tags: Vec<TagColor>,
     },
+    SetFieldTags {
+        entry_id: Uuid,
+        field_id: Uuid,
+        tags: Vec<TagColor>,
+    },
     SetTrayTags {
         tags: Vec<TagColor>,
         vault_id: Uuid,
@@ -343,6 +348,11 @@ fn execute_mutation(state: &Arc<AppState>, command: Command) -> Result<Value, St
                         data.rename_node(node_id, &name)?;
                     }
                 }
+                Command::SetFieldTags {
+                    entry_id,
+                    field_id,
+                    tags,
+                } => data.set_field_tags(entry_id, field_id, tags)?,
                 Command::SetNodeTags { node_id, tags } => data.set_node_tags(node_id, tags)?,
                 Command::DeleteNode { node_id } => data.delete_node(node_id)?,
                 Command::MoveNode {
@@ -770,5 +780,63 @@ mod tests {
         );
         let restarted = Arc::new(AppState::new(storage, config));
         assert_eq!(run_command(&restarted, json!({"command":"unlock_vault", "vault_id":fixture.vault_id, "password":"password123"})).unwrap(), view);
+    }
+    #[test]
+    fn field_tags_persist_preserve_legacy_edits_and_reject_invalid_changes() {
+        let fixture = tagged_fixture();
+        let state = &fixture.state;
+        let initial = run_command(state, json!({"command":"bootstrap"})).unwrap();
+        assert_eq!(
+            initial["current"]["nodes"][0]["children"][0]["fields"][0]["tags"],
+            json!([])
+        );
+        let view = run_command(state, json!({"command":"set_field_tags", "entry_id":fixture.entry_id, "field_id":fixture.field_id, "tags":["blue", "red"]})).unwrap();
+        let field = &view["nodes"][0]["children"][0]["fields"][0];
+        assert_eq!(field["tags"], json!(["blue", "red"]));
+        assert!(field["value"].is_null());
+        for (entry, field, tags) in [
+            (
+                fixture.entry_id.clone(),
+                fixture.field_id.clone(),
+                json!(["red", "red"]),
+            ),
+            (fixture.entry_id.clone(), json!(Uuid::new_v4()), json!([])),
+            (json!(Uuid::new_v4()), fixture.field_id.clone(), json!([])),
+        ] {
+            assert!(run_command(state, json!({"command":"set_field_tags", "entry_id":entry, "field_id":field, "tags":tags})).is_err());
+            assert_eq!(
+                run_command(state, json!({"command":"bootstrap"})).unwrap()["current"],
+                view
+            );
+        }
+        assert!(serde_json::from_value::<Command>(json!({"command":"set_field_tags", "entry_id":fixture.entry_id, "field_id":fixture.field_id, "tags":["unknown"]})).is_err());
+        let edited = run_command(state, json!({"command":"update_entry", "entry_id":fixture.entry_id, "name":"Legacy edit", "fields":[{
+            "id":fixture.field_id, "label":"Password", "value":"synthetic-secret", "kind":"secret", "masked":true
+        }]})).unwrap();
+        assert_eq!(
+            edited["nodes"][0]["children"][0]["fields"][0]["tags"],
+            json!(["blue", "red"])
+        );
+        let copied = run_command(state, json!({"command":"copy_field", "entry_id":fixture.entry_id, "field_id":fixture.field_id})).unwrap();
+        assert_eq!(copied, json!("synthetic-secret"));
+        assert!(run_command(state, json!({"command":"update_entry", "entry_id":fixture.entry_id, "name":"Bad update", "fields":[{
+            "id":fixture.field_id, "label":"Password", "value":"different", "kind":"secret", "masked":true, "tags":["green", "green"]
+        }]})).is_err());
+        assert_eq!(
+            run_command(state, json!({"command":"bootstrap"})).unwrap()["current"],
+            edited
+        );
+        run_command(state, json!({"command":"lock_vault"})).unwrap();
+        assert!(run_command(state, json!({"command":"set_field_tags", "entry_id":fixture.entry_id, "field_id":fixture.field_id, "tags":[]})).is_err());
+        let storage = AppStorage::new(fixture.directory.path(), fixture.directory.path()).unwrap();
+        let config = storage.load_config().unwrap();
+        let restarted = Arc::new(AppState::new(storage, config));
+        let restored = run_command(&restarted, json!({"command":"unlock_vault", "vault_id":fixture.vault_id, "password":"password123"})).unwrap();
+        assert_eq!(restored, edited);
+        let cleared = run_command(&restarted, json!({"command":"set_field_tags", "entry_id":fixture.entry_id, "field_id":fixture.field_id, "tags":[]})).unwrap();
+        assert_eq!(
+            cleared["nodes"][0]["children"][0]["fields"][0]["tags"],
+            json!([])
+        );
     }
 }
