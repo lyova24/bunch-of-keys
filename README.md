@@ -2,6 +2,10 @@
 
 <img src="icons/wordmark.svg" alt="Keepy" width="280">
 
+[![CI](https://github.com/lyova24/keepy/actions/workflows/ci.yml/badge.svg)](https://github.com/lyova24/keepy/actions/workflows/ci.yml)
+[![Documentation](https://github.com/lyova24/keepy/actions/workflows/docs.yml/badge.svg)](https://github.com/lyova24/keepy/actions/workflows/docs.yml)
+[![Dependency security](https://github.com/lyova24/keepy/actions/workflows/security.yml/badge.svg)](https://github.com/lyova24/keepy/actions/workflows/security.yml)
+
 A native macOS application for local, encrypted credential collections.
 Formerly bunch-of-keys; existing vaults migrate automatically to Keepy.
 Current version: **2.2.6**. Requires **macOS 14 Sonoma or later**.
