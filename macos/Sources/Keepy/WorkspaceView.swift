@@ -100,12 +100,12 @@ struct WorkspaceView: View {
         .toolbar {
             ToolbarItem(placement: .navigation) {
                 Menu { vaultMenu } label: { Label("Vaults", systemImage: "externaldrive") }
-                    .disabled(store.busy || !store.ready || !store.serviceAvailable || store.editor != nil)
+                    .disabled(store.busy || !store.ready || !store.serviceAvailable || store.editor != nil || store.vaultSettingsHaveChanges)
             }
             ToolbarItemGroup(placement: .primaryAction) {
                 if store.vault != nil {
                     Button("Edit", systemImage: "square.and.pencil") { if let node = store.selectedNode { store.edit(node) } }
-                        .disabled(store.selectedNode == nil || store.busy || store.editor != nil).help("Edit Selection (⌘E)")
+                        .disabled(store.selectedNode == nil || store.busy || store.editor != nil || store.vaultSettingsHaveChanges).help("Edit Selection (⌘E)")
                 }
                 Menu {
                     if store.vault != nil {
@@ -116,19 +116,17 @@ struct WorkspaceView: View {
                     }
                     Button("New Vault…") { store.editor = EditorRoute(kind: .createVault) }
                 } label: { Label("Add", systemImage: "plus") }
-                    .disabled(store.busy || !store.ready || !store.serviceAvailable || store.editor != nil)
+                    .disabled(store.busy || !store.ready || !store.serviceAvailable || store.editor != nil || store.vaultSettingsHaveChanges)
                 if store.vault != nil {
                     Button("Lock Vault", systemImage: "lock") { store.lock() }.help("Lock Vault (⇧⌘L)")
                 }
             }
         }
         .sheet(item: Binding(get: { store.editor?.isInline == false ? store.editor : nil }, set: { if $0 == nil && store.editor?.isInline == false { store.editor = nil } })) { route in EditorView(route: route).environmentObject(store).preferredColorScheme(store.colorScheme) }
-        .sheet(isPresented: $store.showingKeys) { SSHKeysEditor().environmentObject(store).preferredColorScheme(store.colorScheme) }
-        .sheet(isPresented: $store.showingTouchIDSetup, onDismiss: { store.cancelTouchIDSetup() }) { TouchIDSettingsView().environmentObject(store).preferredColorScheme(store.colorScheme) }
         .task(id: store.touchIDVaultID) { await store.refreshTouchID() }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in Task { await store.refreshTouchID() } }
         .sheet(isPresented: Binding(get: { store.sshPrompt != nil }, set: { if !$0 { store.sshPrompt = nil } })) { SSHPassphraseView().environmentObject(store) }
-        .alert(AppLogo.name, isPresented: Binding(get: { store.error != nil && store.editor == nil && store.sshPrompt == nil && !store.showingKeys }, set: { if !$0 { store.error = nil } })) {
+        .alert(AppLogo.name, isPresented: Binding(get: { store.error != nil && store.editor == nil && store.sshPrompt == nil && !store.showingKeys && !store.settingsPresented }, set: { if !$0 { store.error = nil } })) {
             Button("OK") { store.error = nil }
         } message: { Text(store.error ?? "") }
         .confirmationDialog("Delete \(store.deleteTarget?.name ?? "item")?", isPresented: Binding(get: { store.deleteTarget != nil }, set: { if !$0 { store.deleteTarget = nil } }), titleVisibility: .visible) {
@@ -146,12 +144,7 @@ struct WorkspaceView: View {
         }
         if store.vault != nil {
             Divider()
-            Button("Rename Vault…") { store.manageVault(password: false) }.disabled(!store.canManageVault)
-            Button("Change Master Password…") { store.manageVault(password: true) }.disabled(!store.canManageVault)
-            Button("Tag Names…") { store.manageTagNames() }.disabled(!store.canManageVault)
-            Button("Tray Tags…") { store.manageTrayTags() }.disabled(!store.canManageVault)
-            Button("SSH Keys…") { store.showingKeys = true }
-            Button("Touch ID…") { store.manageTouchID() }.disabled(!store.canManageTouchID).help(store.touchIDHelp)
+            Button("Current Vault Settings…") { store.openVaultSettings(.overview) }.disabled(!store.canManageVault)
         }
         Divider()
         SettingsLink { Text("Settings…") }
@@ -191,7 +184,7 @@ struct TagFilterPalette: View {
                 .background(navigation.activeColor == nil ? Color.accentColor.opacity(0.18) : Color.clear, in: RoundedRectangle(cornerRadius: 5))
                 .onHover { hovering in if hovering && !store.tagFilter.isEmpty { navigation.activeColor = nil } }
             Text("↑↓ Select · Return Toggle · Esc Close").font(.caption2).foregroundStyle(.secondary)
-        }.padding(14).frame(width: 260).disabled(store.busy || store.editor != nil)
+        }.padding(14).frame(width: 260).disabled(store.busy || store.editor != nil || store.vaultSettingsHaveChanges)
             .onChange(of: store.tagFilter) { _, colors in if colors.isEmpty && navigation.activeColor == nil { navigation.activeColor = .red } }
     }
 }

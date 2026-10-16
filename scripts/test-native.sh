@@ -19,6 +19,7 @@ ssh-keygen -q -t ed25519 -N 'synthetic-tray-passphrase' -f "$scratch/tray-key"
   macos/Sources/Keepy/SSHKeysEditor.swift macos/Tests/NativeStore.swift \
   macos/Sources/Keepy/WindowSurface.swift \
   macos/Sources/Keepy/UpdateController.swift macos/Tests/NativeUpdates.swift \
+  macos/Sources/Keepy/SettingsView.swift macos/Sources/Keepy/VaultSettings.swift macos/Tests/NativeVaultSettings.swift \
   macos/Tests/NativeOutline.swift macos/Tests/NativeWindowSurface.swift \
   macos/Tests/NativeOutlineKeyboard.swift macos/Tests/NativeSearchExpansion.swift \
   macos/Tests/NativeTagFilter.swift \

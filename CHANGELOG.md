@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.2.10 - 2026-10-17
+
+- Use compact entry/field labels in menu bar credential groups by default; add
+  an immediate, persistent Show full credential names setting and retain full
+  paths in tooltips (#59).
+- Consolidate tag names, tray tags, SSH keys, Touch ID, vault details and master
+  password changes into the Settings window under Current Vault. Hide vault
+  settings while locked and replace scattered configuration dialogs with a
+  single settings entry point.
+- Protect unsaved drafts when switching settings pages, selecting SSH keys,
+  closing Settings or quitting; clear vault drafts on lock or vault switch.
+
 ## 2.2.9 - 2026-10-17
 
 - Add encrypted per-vault custom names for the seven existing tag colors (#51).

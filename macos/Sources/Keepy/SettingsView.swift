@@ -1,7 +1,8 @@
 import SwiftUI
 import ServiceManagement
 
-struct SettingsView: View {
+struct GeneralSettingsView: View {
+    @EnvironmentObject var shortcuts: TrayShortcutSettings
     @EnvironmentObject var store: AppStore
     @EnvironmentObject var updates: UpdateController
     @ViewState private var draft = Preferences()
@@ -20,6 +21,13 @@ struct SettingsView: View {
                     Stepper("Lock after \(draft.autoLockSeconds / 60) minutes of inactivity", value: $draft.autoLockSeconds, in: 60...86400, step: 60)
                     Stepper("Clear clipboard after \(draft.clipboardClearSeconds) seconds", value: $draft.clipboardClearSeconds, in: 5...3600, step: 5)
                     Text("Vaults also lock when the Mac sleeps, the display sleeps, or your login session becomes inactive.").font(.caption).foregroundStyle(.secondary)
+                }
+                Section("Menu Bar") {
+                    Toggle("Show full credential names", isOn: Binding(
+                        get: { shortcuts.showFullCredentialNames }, set: { shortcuts.setShowFullCredentialNames($0) }
+                    ))
+                    Text("Off: entry and field only. On: include the full folder path. Full context is always available in tooltips. This setting applies immediately.")
+                        .font(.caption).foregroundStyle(.secondary)
                 }
                 TrayShortcutSection()
                 Section("Startup") {
@@ -44,10 +52,12 @@ struct SettingsView: View {
             Divider()
             HStack {
                 Text("Version \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "development")").font(.caption).foregroundStyle(.secondary); Spacer()
+                Button("Cancel") { draft = store.settings; store.error = nil }
+                    .disabled(draft == store.settings || saving)
                 if saving { ProgressView().controlSize(.small) }
                 Button("Save") { saving = true; Task { _ = await store.saveSettings(draft); saving = false } }.disabled(draft == store.settings || saving || !store.serviceAvailable)
             }.padding(16)
-        }.frame(width: 500, height: 600)
+        }.frame(maxWidth: .infinity, maxHeight: .infinity)
             .onAppear { draft = store.settings; store.error = nil }
             .onChange(of: draft) { _, value in store.settingsHaveChanges = value != store.settings }
             .onChange(of: store.settings) { _, value in store.settingsHaveChanges = draft != value }

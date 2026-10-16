@@ -22,23 +22,25 @@ struct RenameVaultEditor: View {
     private var validation: String? { store.vaultNameError(name, excluding: vault.id) }
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Rename Vault").font(.title2.weight(.semibold))
+            Text("Vault Details").font(.title2.weight(.semibold))
             TextField("Vault name", text: $name).textFieldStyle(.roundedBorder).focused($focused)
                 .onChange(of: name) { _, _ in edited = true; store.error = nil }
             Text("The vault's contents, password and file location stay the same.").font(.caption).foregroundStyle(.secondary)
             if edited, let validation { Text(validation).foregroundStyle(.red).font(.callout) }
             EditorError()
             HStack {
-                Button("Cancel") { name = ""; store.editor = nil; store.error = nil }.keyboardShortcut(.cancelAction)
+                Button("Cancel") { name = vault.name; store.vaultSettingsHaveChanges = false; store.error = nil }.keyboardShortcut(.cancelAction)
                 Spacer()
                 if store.busy { ProgressView().controlSize(.small) }
-                Button("Rename") { Task { if await store.renameVault(id: vault.id, name: name) { name = "" } } }
+                Button("Rename") { Task { if await store.renameVault(id: vault.id, name: name) { name = store.vaultName; store.vaultSettingsHaveChanges = false } } }
                     .keyboardShortcut(.defaultAction).buttonStyle(.borderedProminent)
                     .disabled(validation != nil || normalized == vault.name)
             }
-        }.padding(24).frame(width: 400).disabled(store.busy).interactiveDismissDisabled(store.busy)
+            SettingsSaveStatus()
+        }.padding(24).frame(maxWidth: .infinity).disabled(store.busy)
             .onAppear { name = vault.name; edited = false; focused = true; store.error = nil }
-            .onDisappear { name = "" }
+            .onChange(of: name) { _, _ in store.vaultSettingsHaveChanges = normalized != vault.name }
+            .onDisappear { name = ""; store.vaultSettingsHaveChanges = false }
     }
 }
 
@@ -64,7 +66,7 @@ struct ChangeMasterPasswordEditor: View {
             if attempted, let validation { Text(validation).font(.callout).foregroundStyle(.red) }
             EditorError()
             HStack {
-                Button("Cancel") { clear(); store.editor = nil; store.error = nil }.keyboardShortcut(.cancelAction)
+                Button("Cancel") { clear(); store.error = nil }.keyboardShortcut(.cancelAction)
                 Spacer()
                 if store.busy { ProgressView().controlSize(.small) }
                 Button("Change Password") {
@@ -74,12 +76,13 @@ struct ChangeMasterPasswordEditor: View {
                 }.keyboardShortcut(.defaultAction).buttonStyle(.borderedProminent)
                     .disabled(current.isEmpty || new.isEmpty || confirmation.isEmpty)
             }
-        }.textFieldStyle(.roundedBorder).padding(24).frame(width: 400).disabled(store.busy).interactiveDismissDisabled(store.busy)
+        }.textFieldStyle(.roundedBorder).padding(24).frame(maxWidth: .infinity).disabled(store.busy)
             .onAppear { focused = true; store.error = nil }
             .onDisappear { clear() }
-            .onChange(of: current) { _, _ in store.error = nil }
-            .onChange(of: new) { _, _ in store.error = nil }
-            .onChange(of: confirmation) { _, _ in store.error = nil }
+            .onChange(of: current) { _, _ in updateDirty() }
+            .onChange(of: new) { _, _ in updateDirty() }
+            .onChange(of: confirmation) { _, _ in updateDirty() }
     }
-    private func clear() { current = ""; new = ""; confirmation = "" }
+    private func clear() { current = ""; new = ""; confirmation = ""; store.vaultSettingsHaveChanges = false }
+    private func updateDirty() { store.error = nil; store.vaultSettingsHaveChanges = !current.isEmpty || !new.isEmpty || !confirmation.isEmpty }
 }

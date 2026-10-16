@@ -32,13 +32,13 @@ extension AppStore {
     func tagLabel(_ color: TagColor) -> String { TagNaming.label(color, in: vault?.tagNames ?? [:]) }
     func tagDescription(_ colors: [TagColor]) -> String { colors.map(tagLabel).joined(separator: ", ") }
     func manageTagNames() {
-        guard canManageVault, let id = vault?.id else { return }
-        error = nil; editor = EditorRoute(kind: .tagNames(id))
+        guard canManageVault else { return }
+        openVaultSettings(.tagNames)
     }
     @discardableResult func saveTagNames(_ names: [String: String], vaultID: String) async -> Bool {
         guard vault?.id == vaultID, serviceAvailable, !busy, !showingKeys, !showingTouchIDSetup,
               !settingsHaveChanges, sshPrompt == nil, deleteTarget == nil else { return false }
-        if let editor { guard case .tagNames(let id) = editor.kind, id == vaultID else { return false } }
+        guard editor == nil else { return false }
         if let message = TagNaming.error(names) { error = message; return false }
         return await mutate("set_tag_names", ["vault_id": vaultID, "names": TagNaming.normalized(names)])
     }
@@ -48,7 +48,6 @@ struct TagNamesEditor: View {
     let vaultID: String
     @ViewState private var names: [String: String] = [:]
     @ViewState private var original: [String: String] = [:]
-    @ViewState private var confirmDiscard = false
     private var changed: Bool { TagNaming.normalized(names) != original }
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -71,17 +70,17 @@ struct TagNamesEditor: View {
                 Text(message).font(.callout).foregroundStyle(.red).accessibilityLabel(message)
             }
             HStack {
-                Button("Cancel") { if changed { confirmDiscard = true } else { close() } }.keyboardShortcut(.cancelAction)
+                Button("Cancel") { reset() }.keyboardShortcut(.cancelAction)
                 Spacer()
                 if store.busy { ProgressView().controlSize(.small) }
-                Button("Save") { Task { if await store.saveTagNames(names, vaultID: vaultID) { close() } } }
+                Button("Save") { Task { if await store.saveTagNames(names, vaultID: vaultID) { original = store.vault?.tagNames ?? [:]; reset(); store.notice = "Tag names saved." } } }
                     .keyboardShortcut(.defaultAction).buttonStyle(.borderedProminent).disabled(!changed || TagNaming.error(names) != nil)
             }
-        }.padding(24).frame(width: 440).disabled(store.busy).interactiveDismissDisabled()
+            SettingsSaveStatus()
+        }.padding(24).frame(maxWidth: .infinity).disabled(store.busy)
             .onAppear { original = store.vault?.tagNames ?? [:]; names = original; store.error = nil }
-            .confirmationDialog("Discard tag name changes?", isPresented: $confirmDiscard, titleVisibility: .visible) {
-                Button("Discard", role: .destructive) { close() }
-            }
+            .onChange(of: names) { _, _ in store.vaultSettingsHaveChanges = changed }
+            .onDisappear { store.vaultSettingsHaveChanges = false }
     }
-    private func close() { store.editor = nil; store.error = nil }
+    private func reset() { names = original; store.vaultSettingsHaveChanges = false; store.error = nil }
 }

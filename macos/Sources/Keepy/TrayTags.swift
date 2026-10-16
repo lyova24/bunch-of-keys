@@ -13,7 +13,11 @@ struct TrayCredential: Equatable, Identifiable {
     let path: String
     let action: CredentialAction
     var fullTitle: String { "\(name) › \(label)" + (path.isEmpty ? "" : " — \(path)") }
-    var title: String { fullTitle.count > 100 ? String(fullTitle.prefix(99)) + "…" : fullTitle }
+    func title(showFullNames: Bool) -> String {
+        let value = showFullNames ? fullTitle : "\(name) › \(label)"
+        let limit = showFullNames ? 100 : 60
+        return value.count > limit ? String(value.prefix(limit - 1)) + "…" : value
+    }
 }
 struct TrayTagGroup: Equatable, Identifiable {
     let id: TagColor
@@ -52,9 +56,8 @@ extension Vault {
 extension AppStore {
     var canUseTrayCredentials: Bool { canManageVault && error == nil }
     func manageTrayTags() {
-        guard canManageVault, let id = vault?.id else { return }
-        error = nil
-        editor = EditorRoute(kind: .trayTags(id))
+        guard canManageVault else { return }
+        openVaultSettings(.tray)
     }
     @discardableResult func activateTrayCredential(_ target: CredentialTarget) async -> Bool {
         guard canUseTrayCredentials, vault?.id == target.vaultID,
@@ -64,9 +67,7 @@ extension AppStore {
     func saveTrayTags(_ colors: Set<TagColor>, vaultID: String) async -> Bool {
         guard vault?.id == vaultID, serviceAvailable, !busy, !showingKeys, !showingTouchIDSetup,
               !settingsHaveChanges, sshPrompt == nil, deleteTarget == nil else { return false }
-        if let editor {
-            guard case .trayTags(let id) = editor.kind, id == vaultID else { return false }
-        }
+        guard editor == nil else { return false }
         return await mutate("set_tray_tags", ["vault_id": vaultID, "tags": TagColor.allCases.filter { colors.contains($0) }.map(\.rawValue)])
     }
 }
@@ -75,7 +76,6 @@ struct TrayTagsEditor: View {
     let vaultID: String
     @ViewState private var selected = Set<TagColor>()
     @ViewState private var original = Set<TagColor>()
-    @ViewState private var confirmDiscard = false
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Tray Tags").font(.title2.weight(.semibold))
@@ -96,18 +96,18 @@ struct TrayTagsEditor: View {
                 .font(.caption).foregroundStyle(.secondary)
             EditorError()
             HStack {
-                Button("Cancel") { if selected != original { confirmDiscard = true } else { close() } }.keyboardShortcut(.cancelAction)
+                Button("Cancel") { reset() }.keyboardShortcut(.cancelAction)
                 Spacer()
                 if store.busy { ProgressView().controlSize(.small) }
                 Button("Save") {
-                    Task { if await store.saveTrayTags(selected, vaultID: vaultID) { close() } }
+                    Task { if await store.saveTrayTags(selected, vaultID: vaultID) { original = selected; store.vaultSettingsHaveChanges = false; store.notice = "Tray tags saved." } }
                 }.keyboardShortcut(.defaultAction).buttonStyle(.borderedProminent).disabled(selected == original)
             }
-        }.padding(24).frame(width: 400).disabled(store.busy).interactiveDismissDisabled(store.busy)
+            SettingsSaveStatus()
+        }.padding(24).frame(maxWidth: .infinity).disabled(store.busy)
             .onAppear { selected = Set(store.vault?.trayTags ?? []); original = selected; store.error = nil }
-            .confirmationDialog("Discard tag changes?", isPresented: $confirmDiscard, titleVisibility: .visible) {
-                Button("Discard", role: .destructive) { close() }
-            }
+            .onChange(of: selected) { _, _ in store.vaultSettingsHaveChanges = selected != original }
+            .onDisappear { store.vaultSettingsHaveChanges = false }
     }
-    private func close() { store.editor = nil; store.error = nil }
+    private func reset() { selected = original; store.vaultSettingsHaveChanges = false; store.error = nil }
 }

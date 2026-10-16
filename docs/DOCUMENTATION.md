@@ -86,9 +86,9 @@ Capture these states as window-only PNG files, excluding other applications:
 | `entry-editor.png` | Demo server editor with tags and Text/Secret fields |
 | `ssh-field.png` | Editor scrolled to the SSH field and key reference |
 | `tag-filter.png` | Search for `demo`, Green selected, filter results visible |
-| `ssh-keys.png` | Vault → SSH Keys, imported Demo SSH Key, empty private-key input |
+| `ssh-keys.png` | Settings → Current Vault → SSH Keys, imported Demo SSH Key, empty private-key input |
 | `ssh-passphrase.png` | Demo server's SSH connection passphrase prompt, input empty |
-| `theme-settings.png` | Settings, theme selector and Liquid Glass switch |
+| `theme-settings.png` | Settings → General, theme selector and Liquid Glass switch |
 
 The initial set was captured with Keepy 2.1.1 on macOS 26.
 

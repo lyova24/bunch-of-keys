@@ -42,13 +42,14 @@ import Foundation
         let scroll = VaultOutline.makeScrollView(coordinator:coordinator)
         defer { coordinator.outline?.detachKeyboardMonitor(); _ = scroll }
         coordinator.update(store.filteredNodes)
-        let editNames = trayMenu.menu.items.first { $0.title == "Tag Names…" }!
+        let editNames = trayMenu.menu.items.first { $0.title == "Current Vault Settings…" }!
         NSApp.sendAction(editNames.action!, to: editNames.target, from: editNames)
-        precondition(store.editor != nil && store.tagFilter == [.green] && store.search == "Account")
+        precondition(store.editor == nil && store.settingsRequest == .overview && store.tagFilter == [.green] && store.search == "Account")
         // Dismissing a draft does not call the persistence operation.
-        store.editor = nil
+        store.settingsRequest = nil
         precondition(store.vault!.tagNames.isEmpty && store.filteredNodes == filtered)
         store.manageTagNames()
+        precondition(store.settingsRequest == .tagNames && store.editor == nil)
         let renamed = await store.saveTagNames(["green":"  Production ","red":"Personal","blue":"Password only"],vaultID:id)
         precondition(renamed); store.editor = nil
         for _ in 0..<100 {

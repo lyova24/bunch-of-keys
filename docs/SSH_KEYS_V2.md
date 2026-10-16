@@ -29,7 +29,7 @@ stores:
 
 ## User workflow
 
-1. Create or import a named private key in Vault → SSH Keys.
+1. Create or import a named private key in Settings → Current Vault → SSH Keys.
 2. Store an SSH field with user, address, optional port, and the key reference.
 3. Use **Connect via SSH**. Encrypted keys request a masked passphrase in-app.
 4. The app starts an owner-only one-key agent and launches the system `ssh`
@@ -47,6 +47,8 @@ The helper marks SSH completion in its private directory so the agent can stop
 without waiting for the entire Terminal application to quit.
 
 ![SSH Keys manager showing a demonstration key's name, algorithm, and fingerprint with an empty private-key input](images/ssh-keys.png)
+
+*The screenshot shows the earlier dialog; these controls now appear in Settings → Current Vault → SSH Keys.*
 
 *Stored keys expose metadata here. Keep the private-key input empty when renaming a key.*
 

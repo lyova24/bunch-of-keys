@@ -23,7 +23,7 @@ enum TouchIDError: LocalizedError {
             if status == errSecMissingEntitlement {
                 return "This build cannot access the protected Keychain. Use the master password and install a build provisioned for Touch ID."
             }
-            return "The protected Keychain could not be accessed (\(status)). Use the master password; you can set up Touch ID again from the Vault menu."
+            return "The protected Keychain could not be accessed (\(status)). Use the master password; you can set up Touch ID again in Settings → Current Vault."
         }
     }
 }
@@ -185,12 +185,12 @@ struct TouchIDSettingsView: View {
                 Label("Touch ID is enabled for this vault", systemImage: "checkmark.circle")
                 Button("Disable Touch ID", role: .destructive) { store.disableTouchID() }.disabled(store.busy)
             } else if store.touchIDUnavailableReason == nil {
-                SecureField("Current master password", text: $password).textFieldStyle(.roundedBorder).focused($passwordFocused)
+                SecureField("Current master password", text: $password).textFieldStyle(.roundedBorder).focused($passwordFocused).disabled(store.busy)
                 Text("Confirm your master password, then approve the macOS Touch ID prompt.").font(.caption).foregroundStyle(.secondary)
             }
             if let error = store.touchIDMessage { Text(error).font(.callout).foregroundStyle(.secondary).textSelection(.enabled) }
             HStack {
-                Button(store.touchIDInProgress ? "Cancel" : "Done") { password = ""; store.cancelTouchIDSetup() }.keyboardShortcut(.cancelAction)
+                Button("Cancel") { password = ""; if store.touchIDInProgress { store.cancelTouchIDSetup(); store.showingTouchIDSetup = true } }.keyboardShortcut(.cancelAction)
                 Spacer()
                 if store.touchIDInProgress { ProgressView().controlSize(.small) }
                 if !store.touchIDEnrolled && store.touchIDUnavailableReason == nil {
@@ -200,9 +200,10 @@ struct TouchIDSettingsView: View {
                     }.buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction).disabled(password.isEmpty || store.busy)
                 }
             }
-        }.padding(24).frame(width: 390)
-            .onAppear { passwordFocused = true }
-            .onDisappear { password = "" }
+        }.padding(24).frame(maxWidth: .infinity)
+            .onAppear { store.manageTouchID(); passwordFocused = true }
+            .onDisappear { password = ""; store.vaultSettingsHaveChanges = false; if store.showingTouchIDSetup { store.cancelTouchIDSetup() } }
             .onChange(of: store.vault?.id) { _, _ in password = "" }
+            .onChange(of: password) { _, value in store.vaultSettingsHaveChanges = !value.isEmpty }
     }
 }

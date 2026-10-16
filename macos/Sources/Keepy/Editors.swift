@@ -10,12 +10,7 @@ struct EditorView: View {
         switch route.kind {
         case .entry(let node): EntryEditor(node: node, parentId: route.parentId, insertionIndex: route.insertionIndex, routeId: route.id.uuidString)
         case .group(let node): GroupEditor(node: node, parentId: route.parentId, insertionIndex: route.insertionIndex, routeId: route.id.uuidString)
-        case .keys: SSHKeysEditor()
         case .createVault: NewVaultEditor()
-        case .renameVault(let vault): RenameVaultEditor(vault: vault)
-        case .changeMasterPassword(let id): ChangeMasterPasswordEditor(vaultID: id)
-        case .trayTags(let id): TrayTagsEditor(vaultID: id)
-        case .tagNames(let id): TagNamesEditor(vaultID: id)
         }
     }
 }
@@ -107,7 +102,7 @@ struct EntryEditor: View {
                                     }.disabled(kind == "ssh" && store.vault?.sshKeys.isEmpty != false)
                                 }
                                 Divider()
-                                Button("Manage SSH Keys…") { store.showingKeys = true }
+                                Button("Manage SSH Keys…") { store.openVaultSettings(.sshKeys) }
                             }
                             Spacer()
                             Text("Drag the grip to reorder fields").font(.caption).foregroundStyle(.secondary)
@@ -191,7 +186,7 @@ struct FieldEditor: View {
                     Text("Select a key").tag("")
                     ForEach(store.vault?.sshKeys ?? []) { key in Text(key.name).tag(key.id) }
                 }
-                Button("Manage SSH Keys…") { store.showingKeys = true }.font(.caption)
+                Button("Manage SSH Keys…") { store.openVaultSettings(.sshKeys) }.font(.caption)
             } else {
                 if field.masked && !showValue { SecureField("Value", text: $field.value).textFieldStyle(.roundedBorder) }
                 else { TextEditor(text: $field.value).font(.system(.body, design: .monospaced)).frame(minHeight: 55, maxHeight: 100).border(.quaternary) }

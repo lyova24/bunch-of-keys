@@ -111,6 +111,7 @@ struct TrayShortcut: Codable, Equatable {
         var enabled = true
         var shortcut = TrayShortcut.default
     }
+    @Published private(set) var showFullCredentialNames: Bool
     @Published private(set) var enabled: Bool
     @Published private(set) var shortcut: TrayShortcut
     @Published private(set) var error: String?
@@ -126,7 +127,12 @@ struct TrayShortcut: Codable, Equatable {
             .map { UserDefaults(suiteName: "dev.keepy.shortcut.\(Data($0.utf8).base64EncodedString())")! } ?? .standard
         let value = self.defaults.data(forKey: preferenceKey).flatMap { try? JSONDecoder().decode(Preference.self, from: $0) }
         let preference = value.flatMap { $0.shortcut.isValid ? $0 : nil } ?? Preference()
+        showFullCredentialNames = self.defaults.bool(forKey: "trayShowFullCredentialNames")
         enabled = preference.enabled; shortcut = preference.shortcut
+    }
+    func setShowFullCredentialNames(_ value: Bool) {
+        showFullCredentialNames = value
+        defaults.set(value, forKey: "trayShowFullCredentialNames")
     }
     func start(action: @escaping () -> Void) {
         guard !started else { return }

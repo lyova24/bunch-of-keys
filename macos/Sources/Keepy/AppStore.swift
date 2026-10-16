@@ -4,7 +4,7 @@ import ServiceManagement
 import UniformTypeIdentifiers
 
 struct EditorRoute: Identifiable {
-    enum Kind { case entry(VaultNode?), group(VaultNode?), keys, createVault, renameVault(VaultSummary), changeMasterPassword(String), trayTags(String), tagNames(String) }
+    enum Kind { case entry(VaultNode?), group(VaultNode?), createVault }
     var id = UUID()
     var kind: Kind
     var parentId: String?
@@ -17,7 +17,13 @@ struct EditorRoute: Identifiable {
 @MainActor final class AppStore: ObservableObject {
     @Published var vaults: [VaultSummary] = []
     @Published var settings = Preferences()
-    @Published var vault: Vault?
+    @Published var vault: Vault? {
+        didSet {
+            if oldValue?.id != vault?.id {
+                vaultSettingsHaveChanges = false; settingsDestination = .general; settingsRequest = nil
+            }
+        }
+    }
     @Published var selectedVaultId = "" {
         didSet {
             if oldValue != selectedVaultId {
@@ -38,15 +44,22 @@ struct EditorRoute: Identifiable {
     @Published var notice: String?
     @Published var editor: EditorRoute?
     @Published var showingKeys = false
+    @Published var settingsSaving = false
     @Published var settingsHaveChanges = false
+    @Published var vaultSettingsHaveChanges = false
+    @Published var settingsDestination: SettingsDestination = .general
+    @Published var settingsRequest: SettingsDestination?
+    @Published var settingsResetID = UUID()
+    @Published var settingsPresented = false
+    var openSettingsWindow: (() -> Void)?
     @Published var showingTouchIDSetup = false
     @Published var touchIDEnrolled = false
     @Published var touchIDUnavailableReason: String?
     @Published var touchIDMessage: String?
     @Published var touchIDInProgress = false
     var hasPendingEdits: Bool {
-        UpdatePolicy.blocksRestart(busy: busy, editor: editor != nil, keys: showingKeys,
-                                  prompt: sshPrompt != nil || showingTouchIDSetup, settings: settingsHaveChanges)
+        UpdatePolicy.blocksRestart(busy: busy || settingsSaving, editor: editor != nil, keys: showingKeys,
+                                  prompt: sshPrompt != nil || showingTouchIDSetup, settings: settingsHaveChanges || vaultSettingsHaveChanges)
     }
     @Published var deleteTarget: VaultNode?
     @Published var sshPrompt: (entry: String, field: String)?
@@ -122,7 +135,7 @@ struct EditorRoute: Identifiable {
     func clearSession() {
         biometricKeychain.cancel(); showingTouchIDSetup = false
         vault = nil; selection = nil; clearFilters(); revealed.removeAll(); activeSSH.removeAll()
-        editor = nil; showingKeys = false; sshPrompt = nil; deleteTarget = nil; notice = nil
+        editor = nil; showingKeys = false; vaultSettingsHaveChanges = false; settingsDestination = .general; settingsRequest = nil; sshPrompt = nil; deleteTarget = nil; notice = nil
         clearClipboard()
     }
     func lock() {
@@ -178,18 +191,18 @@ struct EditorRoute: Identifiable {
             fail(error); return false
         }
     }
-    func addEntry() { guard vault != nil, !busy, editor == nil else { return }; clearFilters(); editor = EditorRoute(kind: .entry(nil), parentId: destination) }
-    func addGroup() { guard vault != nil, !busy, editor == nil else { return }; clearFilters(); editor = EditorRoute(kind: .group(nil), parentId: destination) }
+    func addEntry() { guard vault != nil, !busy, editor == nil, !vaultSettingsHaveChanges else { return }; clearFilters(); editor = EditorRoute(kind: .entry(nil), parentId: destination) }
+    func addGroup() { guard vault != nil, !busy, editor == nil, !vaultSettingsHaveChanges else { return }; clearFilters(); editor = EditorRoute(kind: .group(nil), parentId: destination) }
     func edit(_ node: VaultNode) {
-        guard let current = vault?.node(node.id), !busy, editor == nil else { return }
+        guard let current = vault?.node(node.id), !busy, editor == nil, !vaultSettingsHaveChanges else { return }
         clearFilters(); editor = EditorRoute(kind: current.isGroup ? .group(current) : .entry(current), parentId: vault?.parent(of: current.id))
     }
     @discardableResult func setTags(_ tags: [TagColor], for node: VaultNode) async -> Bool {
-        guard vault?.node(node.id) != nil, editor == nil else { return false }
+        guard vault?.node(node.id) != nil, editor == nil, !vaultSettingsHaveChanges else { return false }
         return await mutate("set_node_tags", ["node_id": node.id, "tags": TagColor.allCases.filter { tags.contains($0) }.map(\.rawValue)])
     }
     func toggleTag(_ tag: TagColor, for node: VaultNode) {
-        guard let current = vault?.node(node.id), !busy, editor == nil else { return }
+        guard let current = vault?.node(node.id), !busy, editor == nil, !vaultSettingsHaveChanges else { return }
         var tags = Set(current.tags)
         if tags.contains(tag) { tags.remove(tag) } else { tags.insert(tag) }
         Task { await setTags(TagColor.allCases.filter { tags.contains($0) }, for: current) }
@@ -304,6 +317,7 @@ struct EditorRoute: Identifiable {
         }
     }
     func importYAML() {
+        guard vault != nil, !busy, editor == nil, !vaultSettingsHaveChanges else { return }
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [UTType(filenameExtension: "yaml")!, UTType(filenameExtension: "yml")!]
         panel.allowsMultipleSelection = false; panel.canChooseDirectories = false
@@ -321,7 +335,8 @@ struct EditorRoute: Identifiable {
         }
     }
     func saveSettings(_ preferences: Preferences) async -> Bool {
-        guard serviceAvailable else { return false }
+        guard serviceAvailable, !busy, !settingsSaving else { return false }
+        settingsSaving = true; defer { settingsSaving = false }
         let previous = settings
         do {
             if preferences.autostart != previous.autostart {
@@ -463,12 +478,11 @@ struct EditorRoute: Identifiable {
 
 extension AppStore {
     var canManageVault: Bool {
-        canManageTouchID && !showingTouchIDSetup
+        canManageTouchID && !showingTouchIDSetup && !vaultSettingsHaveChanges
     }
     func manageVault(password: Bool) {
-        guard canManageVault, let id = vault?.id else { return }
-        error = nil; notice = nil
-        editor = EditorRoute(kind: password ? .changeMasterPassword(id) : .renameVault(VaultSummary(id: id, name: vaultName)))
+        guard canManageVault else { return }
+        openVaultSettings(password ? .password : .overview)
     }
     func vaultNameError(_ name: String, excluding id: String? = nil) -> String? {
         let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -481,18 +495,13 @@ extension AppStore {
         }
         return nil
     }
-    private func canSubmitVaultManagement(_ id: String, password: Bool) -> Bool {
+    private func canSubmitVaultManagement(_ id: String) -> Bool {
         guard vault?.id == id, serviceAvailable, !busy, !showingKeys, !showingTouchIDSetup,
               !settingsHaveChanges, sshPrompt == nil, deleteTarget == nil else { return false }
-        guard let editor else { return true }
-        switch editor.kind {
-        case .renameVault(let target): return !password && target.id == id
-        case .changeMasterPassword(let target): return password && target == id
-        default: return false
-        }
+        return editor == nil
     }
     func renameVault(id: String, name: String) async -> Bool {
-        guard canSubmitVaultManagement(id, password: false) else { return false }
+        guard canSubmitVaultManagement(id) else { return false }
         if let validation = vaultNameError(name, excluding: id) { error = validation; return false }
         let generation = epoch
         busy = true; error = nil; touch()
@@ -509,7 +518,7 @@ extension AppStore {
         }
     }
     func changeMasterPassword(id: String, current: String, new: String, confirmation: String) async -> Bool {
-        guard canSubmitVaultManagement(id, password: true) else { return false }
+        guard canSubmitVaultManagement(id) else { return false }
         if let validation = PasswordChangeValidation.error(current: current, new: new, confirmation: confirmation) {
             error = validation; return false
         }

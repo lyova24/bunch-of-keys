@@ -13,6 +13,7 @@ import CoreServices
             WorkspaceView().environmentObject(store).preferredColorScheme(store.colorScheme)
                 .modifier(WindowSurface(enabled: store.settings.liquidGlass))
                 .background(TrayMenuBridge(controller: tray, store: store, shortcuts: shortcuts))
+                .background(SettingsAccessBridge(store: store))
                 .onAppear { delegate.attach(store, updates: updates, tray: tray) }
         }
         .defaultSize(width: 560, height: 620)
@@ -22,22 +23,17 @@ import CoreServices
                 Button("Check for Updates…") { updates.check() }.disabled(!updates.canCheck)
             }
             CommandGroup(after: .newItem) {
-                Button("New Entry") { store.addEntry() }.keyboardShortcut("n").disabled(store.vault == nil || store.busy || store.editor != nil)
-                Button("New Group") { store.addGroup() }.keyboardShortcut("n", modifiers: [.command, .shift]).disabled(store.vault == nil || store.busy || store.editor != nil)
+                Button("New Entry") { store.addEntry() }.keyboardShortcut("n").disabled(store.vault == nil || store.busy || store.editor != nil || store.vaultSettingsHaveChanges)
+                Button("New Group") { store.addGroup() }.keyboardShortcut("n", modifiers: [.command, .shift]).disabled(store.vault == nil || store.busy || store.editor != nil || store.vaultSettingsHaveChanges)
                 Divider()
-                Button("Import YAML…") { store.importYAML() }.keyboardShortcut("i", modifiers: [.command, .shift]).disabled(store.vault == nil || store.busy || store.editor != nil)
-                Button("New Vault…") { store.editor = EditorRoute(kind: .createVault) }.disabled(store.busy || !store.serviceAvailable || store.editor != nil)
+                Button("Import YAML…") { store.importYAML() }.keyboardShortcut("i", modifiers: [.command, .shift]).disabled(store.vault == nil || store.busy || store.editor != nil || store.vaultSettingsHaveChanges)
+                Button("New Vault…") { store.editor = EditorRoute(kind: .createVault) }.disabled(store.busy || !store.serviceAvailable || store.editor != nil || store.vaultSettingsHaveChanges)
             }
             CommandMenu("Vault") {
-                Button("Rename Vault…") { store.manageVault(password: false) }.disabled(!store.canManageVault)
-                Button("Change Master Password…") { store.manageVault(password: true) }.disabled(!store.canManageVault)
-                Button("Tag Names…") { store.manageTagNames() }.disabled(!store.canManageVault)
-                Button("Tray Tags…") { store.manageTrayTags() }.disabled(!store.canManageVault)
+                Button("Current Vault Settings…") { store.openVaultSettings(.overview) }.disabled(!store.canManageVault)
                 Divider()
                 Button("Lock Vault") { store.lock() }.keyboardShortcut("l", modifiers: [.command, .shift]).disabled(store.vault == nil)
-                Button("Edit Selection…") { if let node = store.selectedNode { store.edit(node) } }.keyboardShortcut("e").disabled(store.selectedNode == nil || store.busy || store.editor != nil)
-                Button("SSH Keys…") { store.showingKeys = true }.disabled(store.vault == nil || store.busy || store.editor != nil)
-                Button("Touch ID…") { store.manageTouchID() }.disabled(!store.canManageTouchID).help(store.touchIDHelp)
+                Button("Edit Selection…") { if let node = store.selectedNode { store.edit(node) } }.keyboardShortcut("e").disabled(store.selectedNode == nil || store.busy || store.editor != nil || store.vaultSettingsHaveChanges)
             }
         }
         Settings {
@@ -96,7 +92,7 @@ import CoreServices
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         if store?.touchIDInProgress == true { store?.lock() }
-        if store?.busy == true && store?.touchIDInProgress != true {
+        if (store?.busy == true || store?.settingsSaving == true) && store?.touchIDInProgress != true {
             let alert = NSAlert()
             alert.messageText = "Keepy is saving changes"
             alert.informativeText = "Wait for the current operation to finish, then try again."

@@ -154,3 +154,19 @@ custom label; credentials are deduplicated within each group. Fields matching
 several tags are available in every matching group. Menu snapshots include group
 labels so renaming refreshes existing menus, while entry actions still revalidate
 the current vault and eligible field IDs before dispatch.
+
+
+Settings uses a single native window with General and unlocked-only Current
+Vault navigation. Configuration editors are embedded pages rather than sheets;
+the main window retains sheets only for creating a vault and interactive SSH
+passphrases. Draft guards block page changes and closing without an explicit
+discard, track pending edits for update/quit policy, and cancel/erase vault-local
+state when the session changes. SSH-key settings can be opened while preserving
+an entry draft; other vault pages require the entry to be finished first.
+
+The native tray preference `trayShowFullCredentialNames` lives beside the global
+shortcut in local UserDefaults (isolated for synthetic runs). Missing values
+select compact entry/field labels, capped at 60 characters. Full labels include
+the path and are capped at 100 characters; tooltips always retain full context.
+The menu observes changes independently of vault updates and preserves field
+identities and action dispatch in either mode.

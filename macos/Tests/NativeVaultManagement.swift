@@ -30,8 +30,8 @@ import AppKit
         precondition(!store.canManageVault)
         store.settingsHaveChanges = false
         store.manageVault(password: false)
-        precondition(store.editor != nil)
-        store.editor = nil // Cancel does not send a mutation.
+        precondition(store.editor == nil && store.settingsRequest == .overview)
+        store.settingsRequest = nil // Cancel does not send a mutation.
         precondition(store.vaultName == "Vault Management Test")
         let renamed = await store.renameVault(id: id, name: "  Renamed Management Test  ")
         precondition(renamed && store.vaultName == "Renamed Management Test" && store.vault == before)

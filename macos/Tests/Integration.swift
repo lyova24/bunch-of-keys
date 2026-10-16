@@ -118,6 +118,7 @@ import Foundation
         try await NativeVaultManagement.run(executable: executable)
         try await NativeTagNames.run(executable: executable)
         try await NativeTrayTags.run(executable: executable, encryptedKey: URL(fileURLWithPath: CommandLine.arguments[3]))
+        try await NativeVaultSettings.run(executable: executable)
         print("Native pipe integration passed: vaults, masking, fields, moves, tags, import, SSH keys, settings and restart.")
     }
 

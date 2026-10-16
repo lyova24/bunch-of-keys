@@ -180,3 +180,12 @@ context-menu labels, reset, colored tray groups and live submenu renaming.
 Failed-write tests temporarily replace an isolated test vault file with a
 directory to force atomic-rename failure, then restore and reopen its original
 encrypted bytes; no user vaults are used.
+
+
+Current-vault Settings tests cover locked/unlocked page availability, routing
+from a preserved entry editor, dirty/busy navigation guards, session changes and
+vault isolation. Native tray checks exercise the compact default, full paths,
+label bounds, tooltip context, immediate menu refresh and UserDefaults restart
+persistence. Visually verify General, every vault page, discard/cancel/save,
+window close/reopen, lock visibility, and compact/full tray groups in both themes.
+Use an isolated `KEEPY_DATA_DIR` for all UI verification.

@@ -32,14 +32,14 @@ visible.
 
 On a Mac with enrolled Touch ID, a provisioned signed build can unlock each
 vault using biometrics. Unlock with the master password first, then choose
-Vault → Touch ID… (also available in the toolbar's vault menu). Enter the current
+**Settings → Current Vault → Touch ID**. Enter the current
 master password, choose Enable Touch ID, and approve the native macOS prompt.
 Enrollment is complete only after a biometric-protected Keychain read succeeds.
 
 After locking, select that vault and choose Unlock with Touch ID. Every unlock
 requires a fresh native authentication. Cancelling leaves the vault locked;
 the password field remains available. No prompts appear automatically. To remove
-the enrollment, unlock the vault and choose Disable Touch ID in the same dialog.
+the enrollment, unlock the vault and choose Disable Touch ID on the same settings page.
 
 Enrollment belongs to this vault on this Mac and is not synchronized or included
 in a vault backup. Renaming the vault retains enrollment. Changing its password
@@ -50,8 +50,8 @@ unavailable, use the master password. This is not password recovery: keep the
 master password available separately, including for older backups.
 
 Ad-hoc builds do not have the provisioning needed for biometric Keychain access.
-Their Touch ID dialog explains the limitation and password unlocking continues
-to work. Hover over the Touch ID menu item or the dialog's information icon to
+Their Touch ID settings page explains the limitation and password unlocking continues
+to work. Hover over the information icon on the Touch ID settings page to
 see an explanatory tooltip. See [Touch ID design and verification](TOUCH_ID.md) for signing setup
 and release checks.
 
@@ -70,7 +70,7 @@ Choose colors under Tags in the group or entry editor, then Save. Use Clear to
 remove all draft tags. Right-click an existing item and open Tags to toggle a
 color immediately or choose Remove All Tags.
 
-Choose **Vault → Tag Names…** (also in the vault picker and tray menu) to give
+Choose **Settings → Current Vault → Tag Names** to give
 the seven colors custom names for this vault. The editor prefills saved names. Use **Save** to
 apply changes or **Cancel** to keep the saved names. **Reset** beside a color,
 or an empty field, restores its default name when saved. Keyboard navigation
@@ -139,7 +139,7 @@ or tags.
 
 *Choose a field type and masking independently. The secret stays masked while editing.*
 
-Vault → SSH Keys lets you paste or import named OpenSSH private keys. Existing
+**Settings → Current Vault → SSH Keys** lets you paste or import named OpenSSH private keys. Existing
 keys display their algorithm, fingerprint and encryption status. Leave the key
 box empty when renaming a key; a replacement keeps all connection references.
 A referenced key cannot be deleted until its SSH fields are removed or updated.
@@ -155,8 +155,8 @@ password-like values and URLs automatically. Existing contents are retained.
 
 ## Tagged credentials in the menu bar
 
-Unlock a vault and choose **Vault → Tray Tags…**, or **Tray Tags…** in the menu
-bar menu. Each color has its own **Show in tray** switch; all start disabled.
+Unlock a vault and choose **Settings → Current Vault → Tray Tags**.
+Each color has its own **Show in tray** switch; all start disabled.
 Save your selection to this vault. The settings are encrypted with the vault,
 persist after restart, and are independent of the current search/tag filter.
 
@@ -189,14 +189,15 @@ favorite flag or favorites list.
 
 ## Rename a vault or change its password
 
-Unlock the vault, finish or cancel any open editor, then open the **Vault** menu
-(or the vault picker in the toolbar).
+Unlock the vault, finish or cancel any open editor, then open
+**Settings → Current Vault** (also reachable through **Current Vault Settings…**
+in the Vault menu, toolbar vault picker and menu bar).
 
-- **Rename Vault…** prefills the current name. Names are trimmed, must contain
+- **Vault Details** prefills the current name. Names are trimmed, must contain
   1–80 characters without control characters, and must be unique without regard
   to case. Cancel or an unchanged name leaves the vault untouched. Renaming keeps
   its UUID, file location, password and contents.
-- **Change Master Password…** asks for the current password, a new password of
+- **Master Password** asks for the current password, a new password of
   at least eight characters and matching confirmation. The new password must
   differ from the current password. After the atomic save, Keepy locks the vault;
   unlock with the new password. Entries, groups, tags, field order and SSH keys
@@ -209,7 +210,26 @@ again. There is no password recovery.
 
 ## Settings and desktop behavior
 
-Open Settings with Command-Comma. Choose System, Light or Dark appearance.
+Open Settings with Command-Comma. **General** contains app preferences. The
+**Current Vault** section appears only while a vault is unlocked and includes
+Vault Details, Tag Names, Tray Tags, SSH Keys, Touch ID and Master Password.
+These pages edit settings inside the same window, with their own Save/Cancel
+controls. Unsaved changes prompt before switching pages or closing Settings;
+Cancel restores the saved values. Locking, switching vaults or changing the
+master password clears the vault's drafts and hides the section. App preferences
+remain available while locked. Manage SSH Keys from an entry editor opens this
+same window and preserves the entry draft; finish that draft before changing
+other vault settings.
+
+In **General → Menu Bar**, **Show full credential names** controls whether
+credential items include their entire folder path. It is off by default, so the
+tray shows just entry and field (for example, Server › Password). Full mode adds
+the folder chain. Labels are bounded in width; hovering always shows the full
+entry, field and path to distinguish matching short names. This preference is
+saved on this Mac and applies immediately to every vault, without Save. It does
+not change tags, grouping or credential actions.
+
+Choose System, Light or Dark appearance in General.
 On macOS 26+, Liquid Glass enables a translucent background across the main and
 Settings windows, including the title bar, and native glass surfaces. The
 background blurs content behind the window while text and controls remain
@@ -224,7 +244,7 @@ Shift-Command-L locks immediately. Closing the window keeps the app in the menu
 bar. The menu bar offers Open, Lock, Settings and Quit; quitting locks first.
 Press **Command-F8** from any app to open this menu, then use the arrow
 keys and Return to choose an action, or Escape to dismiss it. If the top row
-controls media, hold Fn as well to send F8. In **Settings →
+controls media, hold Fn as well to send F8. In **Settings → General →
 Keyboard Shortcuts**, click the shortcut and press a new combination with Control,
 Option or Command. Escape cancels recording. You can disable the shortcut or
 reset it to the default. These changes apply immediately and are saved on this
@@ -236,7 +256,7 @@ provides a link to the system Login Items page.
 
 ![Keepy Settings showing the theme selector, Liquid Glass switch, locking, and clipboard options](images/theme-settings.png)
 
-*Choose System, Light, or Dark in Theme; Liquid Glass is a separate option on macOS 26+.*
+*Choose System, Light, or Dark in General → Theme; Liquid Glass is a separate option on macOS 26+. This screenshot predates the Current Vault sidebar.*
 
 ## Backups
 

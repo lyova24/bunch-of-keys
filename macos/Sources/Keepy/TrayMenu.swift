@@ -17,6 +17,7 @@ import SwiftUI
         var configured: Bool
         var canOpen: Bool
         var canManage: Bool
+        var fullNames: Bool
     }
     private var state: MenuState?
     private var openWindow: (() -> Void)?
@@ -47,6 +48,9 @@ import SwiftUI
                 self.render(self.store?.vault)
             }
         }.store(in: &observations)
+        shortcuts.objectWillChange.sink { [weak self] _ in
+            DispatchQueue.main.async { [weak self] in self?.render(self?.store?.vault) }
+        }.store(in: &observations)
         shortcuts.start { [weak self] in self?.showMenu() }
     }
     private func updateIcon(locked: Bool) {
@@ -74,7 +78,7 @@ import SwiftUI
         let next = MenuState(vaultID: vault?.id,
             name: vault == nil ? "Vault locked" : store.vaults.first(where: { $0.id == vault?.id })?.name ?? "Vault",
             groups: vault?.trayTagGroups ?? [], configured: vault?.trayTags.isEmpty == false,
-            canOpen: store.canUseTrayCredentials, canManage: store.canManageVault)
+            canOpen: store.canUseTrayCredentials, canManage: store.canManageVault, fullNames: shortcuts?.showFullCredentialNames ?? false)
         guard force || state != next else { return }
         state = next
         menu.removeAllItems()
@@ -97,7 +101,7 @@ import SwiftUI
                     empty.isEnabled = false; submenu.addItem(empty)
                 }
                 for credential in group.credentials {
-                    let item = NSMenuItem(title: credential.title, action: #selector(activateCredential(_:)), keyEquivalent: "")
+                    let item = NSMenuItem(title: credential.title(showFullNames: next.fullNames), action: #selector(activateCredential(_:)), keyEquivalent: "")
                     item.target = self; item.representedObject = credential.id; item.isEnabled = next.canOpen
                     item.toolTip = "\(credential.action.title): \(credential.fullTitle)"
                     item.image = NSImage(systemSymbolName: credential.action.symbol, accessibilityDescription: nil)
@@ -105,8 +109,7 @@ import SwiftUI
                 }
                 groupItem.submenu = submenu; menu.addItem(groupItem)
             }
-            add("Tag Names…", action: #selector(configureTagNames), enabled: next.canManage)
-            add("Tray Tags…", action: #selector(configureTrayTags), enabled: next.canManage)
+            add("Current Vault Settings…", action: #selector(configureVault), enabled: next.canManage)
             menu.addItem(.separator())
         }
         add("Settings…", action: #selector(showSettings))
@@ -121,13 +124,9 @@ import SwiftUI
             if store.vault?.id == target.vaultID, store.sshPrompt != nil || store.error != nil { showWorkspace() }
         }
     }
-    @objc private func configureTagNames() {
+    @objc private func configureVault() {
         guard store?.canManageVault == true else { return }
-        showWorkspace(); store?.manageTagNames()
-    }
-    @objc private func configureTrayTags() {
-        guard store?.canManageVault == true else { return }
-        showWorkspace(); store?.manageTrayTags()
+        store?.openVaultSettings(.overview); showSettings()
     }
     private func add(_ title: String, action: Selector? = nil, key: String = "", enabled: Bool = true) {
         let item = NSMenuItem(title: title, action: action, keyEquivalent: key)

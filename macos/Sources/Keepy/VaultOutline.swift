@@ -433,7 +433,7 @@ struct VaultOutline: NSViewRepresentable {
             Task { await store.performFieldAction(entry: entry, field: field.id) }
         }
         @objc func remove() {
-            guard store.editor == nil, !store.busy else { return }
+            guard store.editor == nil, !store.busy, !store.vaultSettingsHaveChanges else { return }
             let selected = outline.flatMap { $0.item(atRow: $0.selectedRow) as? OutlineNode }
             if (contextItem ?? selected)?.field != nil { return }
             if let node = contextItem?.node ?? store.selectedNode { store.deleteTarget = node }
@@ -445,13 +445,13 @@ struct VaultOutline: NSViewRepresentable {
         @objc func revealField() { if let item = contextItem, let field = item.field, let entry = item.entryId { store.reveal(entry: entry, field: field.id) } }
         @objc func openField() { if let item = contextItem, let field = item.field, let entry = item.entryId { performFieldAction(field, entry: entry) } }
         @objc func toggleTag(_ sender: NSMenuItem) {
-            guard !store.busy, store.editor == nil, let item = contextItem,
+            guard !store.busy, store.editor == nil, !store.vaultSettingsHaveChanges, let item = contextItem,
                   let value = sender.representedObject as? String, let tag = TagColor(rawValue: value) else { return }
             if let field = item.field, let entry = item.entryId { store.toggleFieldTag(tag, entry: entry, field: field.id) }
             else if let node = item.node { store.toggleTag(tag, for: node) }
         }
         @objc func removeTags() {
-            guard !store.busy, store.editor == nil, let item = contextItem else { return }
+            guard !store.busy, store.editor == nil, !store.vaultSettingsHaveChanges, let item = contextItem else { return }
             if let field = item.field, let entry = item.entryId { Task { await store.setFieldTags([], entry: entry, field: field.id) } }
             else if let node = item.node { Task { await store.setTags([], for: node) } }
         }
@@ -465,7 +465,7 @@ struct VaultOutline: NSViewRepresentable {
             guard let item, !item.isEditor, item.route == nil else { return }
             func add(_ title: String, _ action: Selector) {
                 let actionItem = NSMenuItem(title: title, action: action, keyEquivalent: ""); actionItem.target = self
-                actionItem.isEnabled = !store.busy && store.editor == nil; menu.addItem(actionItem)
+                actionItem.isEnabled = !store.busy && store.editor == nil && !store.vaultSettingsHaveChanges; menu.addItem(actionItem)
             }
             if let field = item.field {
                 if field.kind != "ssh" { add("Copy", #selector(copyField)) }
@@ -479,18 +479,18 @@ struct VaultOutline: NSViewRepresentable {
                 let tags = item.node?.tags ?? item.field?.tags ?? []
                 let tagsItem = NSMenuItem(title: "Tags", action: nil, keyEquivalent: "")
                 tagsItem.image = NSImage(systemSymbolName: "tag", accessibilityDescription: "Tags")
-                tagsItem.isEnabled = !store.busy && store.editor == nil
+                tagsItem.isEnabled = !store.busy && store.editor == nil && !store.vaultSettingsHaveChanges
                 let tagsMenu = NSMenu(title: "Tags"); tagsMenu.autoenablesItems = false
                 for tag in TagColor.allCases {
                     let tagItem = NSMenuItem(title: store.tagLabel(tag), action: #selector(toggleTag(_:)), keyEquivalent: "")
                     tagItem.target = self; tagItem.representedObject = tag.rawValue; tagItem.image = tag.menuImage
                     tagItem.state = tags.contains(tag) ? .on : .off
-                    tagItem.isEnabled = !store.busy && store.editor == nil
+                    tagItem.isEnabled = !store.busy && store.editor == nil && !store.vaultSettingsHaveChanges
                     tagsMenu.addItem(tagItem)
                 }
                 tagsMenu.addItem(.separator())
                 let clearItem = NSMenuItem(title: "Remove All Tags", action: #selector(removeTags), keyEquivalent: "")
-                clearItem.target = self; clearItem.isEnabled = !tags.isEmpty && !store.busy && store.editor == nil
+                clearItem.target = self; clearItem.isEnabled = !tags.isEmpty && !store.busy && store.editor == nil && !store.vaultSettingsHaveChanges
                 tagsMenu.addItem(clearItem); tagsItem.submenu = tagsMenu; menu.addItem(tagsItem)
                 menu.addItem(.separator())
                 if item.node != nil { add("Delete…", #selector(remove)) }
@@ -502,7 +502,7 @@ struct VaultOutline: NSViewRepresentable {
             if let route = node.route {
                 item.setData(Data(route.id.uuidString.utf8), forType: draftPasteboardType)
             } else {
-                guard store.editor == nil else { return nil }
+                guard store.editor == nil, !store.vaultSettingsHaveChanges else { return nil }
                 if let field = node.field, let entry = node.entryId { item.setString("\(entry):\(field.id)", forType: fieldPasteboardType) }
                 else if let value = node.node { item.setString(value.id, forType: nodePasteboardType) }
                 else { return nil }
@@ -510,13 +510,14 @@ struct VaultOutline: NSViewRepresentable {
             return item
         }
         func outlineView(_ outlineView: NSOutlineView, validateDrop info: NSDraggingInfo, proposedItem item: Any?, proposedChildIndex index: Int) -> NSDragOperation {
+            guard !store.vaultSettingsHaveChanges else { return [] }
             guard !store.isFiltering, !store.busy else { return [] }
             let target = item as? OutlineNode
             if let draft = info.draggingPasteboard.data(forType: draftPasteboardType), String(data: draft, encoding: .utf8) == store.editor?.id.uuidString {
                 if let target, target.node?.isGroup != true { return [] }
                 return .move
             }
-            guard store.editor == nil else { return [] }
+            guard store.editor == nil, !store.vaultSettingsHaveChanges else { return [] }
             if let value = info.draggingPasteboard.string(forType: fieldPasteboardType) {
                 let ids = value.split(separator: ":").map(String.init)
                 guard ids.count == 2, target?.node?.id == ids[0], target?.node?.isGroup == false else { return [] }
