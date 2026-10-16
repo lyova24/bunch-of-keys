@@ -116,3 +116,10 @@ System preferences, cache and saved-state paths move to the new bundle identity;
 if a new path already exists, the earlier copy is retained in Keepy backups.
 The immutable original authenticated format domain remains unchanged so existing
 encrypted vaults keep opening with their existing passwords.
+
+Vault management targets the unlocked vault UUID explicitly. Renaming commits
+only the registry before changing session metadata. Password changes verify the
+current password, prepare fresh Argon2id salt and XChaCha20-Poly1305 wrapping
+nonce for the same vault key, and preserve the encrypted payload. The atomic
+vault write precedes locking and SSH cleanup. Old biometric bindings no longer
+match; native password forms clear when dismissed or the session changes.

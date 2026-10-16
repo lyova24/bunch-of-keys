@@ -12,6 +12,8 @@ struct EditorView: View {
         case .group(let node): GroupEditor(node: node, parentId: route.parentId, insertionIndex: route.insertionIndex, routeId: route.id.uuidString)
         case .keys: SSHKeysEditor()
         case .createVault: NewVaultEditor()
+        case .renameVault(let vault): RenameVaultEditor(vault: vault)
+        case .changeMasterPassword(let id): ChangeMasterPasswordEditor(vaultID: id)
         }
     }
 }

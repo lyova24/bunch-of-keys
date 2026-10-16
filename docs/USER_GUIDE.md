@@ -128,6 +128,26 @@ File → Import YAML (Shift-Command-I) opens the native file picker and imports
 nested groups and entries into the unlocked vault. The importer identifies
 password-like values and URLs automatically. Existing contents are retained.
 
+## Rename a vault or change its password
+
+Unlock the vault, finish or cancel any open editor, then open the **Vault** menu
+(or the vault picker in the toolbar).
+
+- **Rename Vault…** prefills the current name. Names are trimmed, must contain
+  1–80 characters without control characters, and must be unique without regard
+  to case. Cancel or an unchanged name leaves the vault untouched. Renaming keeps
+  its UUID, file location, password and contents.
+- **Change Master Password…** asks for the current password, a new password of
+  at least eight characters and matching confirmation. The new password must
+  differ from the current password. After the atomic save, Keepy locks the vault;
+  unlock with the new password. Entries, groups, tags, field order and SSH keys
+  are preserved. A failed validation or save keeps the original password usable.
+
+**Existing backup copies keep the password used when they were created.**
+Changing the current vault does not change those copies. Existing Touch ID
+permission becomes invalid; unlock with the new password and set up Touch ID
+again. There is no password recovery.
+
 ## Settings and desktop behavior
 
 Open Settings with Command-Comma. Choose System, Light or Dark appearance.

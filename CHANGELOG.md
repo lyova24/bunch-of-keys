@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.2.4 - 2026-10-16
+
+- Add vault renaming and password changes from the Vault menu, with shared name
+  validation, current-password verification and password confirmation (#49).
+- Preserve vault identity, contents and file paths; atomically replace password
+  wrapping with a fresh salt and nonce, then lock and invalidate Touch ID.
+- Protect open editors and stale requests; explain that existing backups keep
+  their original passwords.
+
 ## 2.2.3 - 2026-10-16
 
 - Open the native menu bar menu globally with Command-F8, including while

@@ -145,6 +145,8 @@ struct WorkspaceView: View {
         }
         if store.vault != nil {
             Divider()
+            Button("Rename Vault…") { store.manageVault(password: false) }.disabled(!store.canManageVault)
+            Button("Change Master Password…") { store.manageVault(password: true) }.disabled(!store.canManageVault)
             Button("SSH Keys…") { store.showingKeys = true }
             Button("Touch ID…") { store.manageTouchID() }.disabled(!store.canManageTouchID).help(store.touchIDHelp)
         }
@@ -320,6 +322,9 @@ struct AuthenticationView: View {
                 AppWordmarkView().frame(width: 140, height: 46)
             }.accessibilityElement(children: .ignore).accessibilityLabel(AppLogo.name)
             Text(creating ? "Create your first vault" : "Unlock your vault").font(.title2.weight(.semibold))
+            if let notice = store.notice {
+                Text(notice).font(.callout).foregroundStyle(.green).multilineTextAlignment(.center).frame(maxWidth: 300)
+            }
             VStack(spacing: 12) {
                 if creating { TextField("Vault name", text: $name).textFieldStyle(.roundedBorder) }
                 else {

@@ -29,6 +29,9 @@ import CoreServices
                 Button("New Vault…") { store.editor = EditorRoute(kind: .createVault) }.disabled(store.busy || !store.serviceAvailable || store.editor != nil)
             }
             CommandMenu("Vault") {
+                Button("Rename Vault…") { store.manageVault(password: false) }.disabled(!store.canManageVault)
+                Button("Change Master Password…") { store.manageVault(password: true) }.disabled(!store.canManageVault)
+                Divider()
                 Button("Lock Vault") { store.lock() }.keyboardShortcut("l", modifiers: [.command, .shift]).disabled(store.vault == nil)
                 Button("Edit Selection…") { if let node = store.selectedNode { store.edit(node) } }.keyboardShortcut("e").disabled(store.selectedNode == nil || store.busy || store.editor != nil)
                 Button("SSH Keys…") { store.showingKeys = true }.disabled(store.vault == nil || store.busy || store.editor != nil)

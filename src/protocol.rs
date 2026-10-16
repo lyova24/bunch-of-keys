@@ -32,6 +32,16 @@ enum Command {
         vault_id: Uuid,
         password: String,
     },
+    RenameVault {
+        vault_id: Uuid,
+        name: String,
+    },
+    ChangeMasterPassword {
+        vault_id: Uuid,
+        current_password: String,
+        new_password: String,
+        confirmation: String,
+    },
     BiometricBinding {
         vault_id: Uuid,
     },
@@ -137,22 +147,6 @@ fn execute(state: &Arc<AppState>, command: Command) -> Result<Value, String> {
             state.lock();
             Ok(Value::Null)
         }
-        Command::CreateVault { name, password } => {
-            let password = Zeroizing::new(password);
-            serde_json::to_value(
-                state
-                    .create_vault(&name, password.as_bytes())
-                    .map_err(|e| e.to_string())?,
-            )
-        }
-        Command::UnlockVault { vault_id, password } => {
-            let password = Zeroizing::new(password);
-            serde_json::to_value(
-                state
-                    .unlock_vault(vault_id, password.as_bytes())
-                    .map_err(|e| e.to_string())?,
-            )
-        }
         Command::RevealField { entry_id, field_id } | Command::CopyField { entry_id, field_id } => {
             serde_json::to_value(
                 state
@@ -160,6 +154,10 @@ fn execute(state: &Arc<AppState>, command: Command) -> Result<Value, String> {
                     .map_err(|e| e.to_string())?,
             )
         }
+        command @ (Command::CreateVault { .. }
+        | Command::UnlockVault { .. }
+        | Command::RenameVault { .. }
+        | Command::ChangeMasterPassword { .. }) => return execute_vault_identity(state, command),
         Command::BiometricBinding { vault_id } => serde_json::to_value(
             state
                 .biometric_binding(vault_id)
@@ -215,6 +213,69 @@ fn execute(state: &Arc<AppState>, command: Command) -> Result<Value, String> {
     };
     result.map_err(|e| e.to_string())
 }
+fn execute_vault_identity(state: &AppState, command: Command) -> Result<Value, String> {
+    let result = match command {
+        Command::CreateVault { name, password } => {
+            let password = Zeroizing::new(password);
+            serde_json::to_value(
+                state
+                    .create_vault(&name, password.as_bytes())
+                    .map_err(|e| e.to_string())?,
+            )
+        }
+        Command::UnlockVault { vault_id, password } => {
+            let password = Zeroizing::new(password);
+            serde_json::to_value(
+                state
+                    .unlock_vault(vault_id, password.as_bytes())
+                    .map_err(|e| e.to_string())?,
+            )
+        }
+        Command::RenameVault { vault_id, name } => serde_json::to_value(
+            state
+                .rename_vault(vault_id, &name)
+                .map_err(|e| e.to_string())?,
+        ),
+        Command::ChangeMasterPassword {
+            vault_id,
+            current_password,
+            new_password,
+            confirmation,
+        } => {
+            change_password_request(
+                state,
+                vault_id,
+                current_password,
+                new_password,
+                confirmation,
+            )?;
+            Ok(Value::Null)
+        }
+        _ => unreachable!("only vault identity commands are routed here"),
+    };
+    result.map_err(|e| e.to_string())
+}
+
+fn change_password_request(
+    state: &AppState,
+    vault_id: Uuid,
+    current_password: String,
+    new_password: String,
+    confirmation: String,
+) -> Result<(), String> {
+    let current = Zeroizing::new(current_password);
+    let new = Zeroizing::new(new_password);
+    let confirmation = Zeroizing::new(confirmation);
+    state
+        .change_master_password(
+            vault_id,
+            current.as_bytes(),
+            new.as_bytes(),
+            confirmation.as_bytes(),
+        )
+        .map_err(|e| e.to_string())
+}
+
 fn execute_mutation(state: &Arc<AppState>, command: Command) -> Result<Value, String> {
     let view = state
         .mutate(|data| {

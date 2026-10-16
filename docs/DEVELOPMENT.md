@@ -47,7 +47,9 @@ Rust tests cover encryption, model validation, compatibility, storage and SSH
 agent cleanup. Swift integration tests exercise the actual bundled pipe service,
 masking, copying, URLs, field reordering, tree moves, colored tag mutations,
 legacy decoding and filtering, YAML import, SSH key references, preferences,
-and persistence after a full process restart. Native store tests verify tag
+vault renaming and master password changes, and persistence after a full process
+restart. Vault management tests also cover failed writes, old-password rejection,
+Touch ID invalidation and late responses after locking. Native store tests verify tag
 filter cleanup, clipboard ownership, clearing on lock, and protection from
 late reveal responses on a private test pasteboard.
 Visually verify native windows, editing, drag-and-drop, lock/unlock, Settings,

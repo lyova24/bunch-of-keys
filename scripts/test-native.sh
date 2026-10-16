@@ -11,7 +11,7 @@ xcrun swiftc -swift-version 5 -warnings-as-errors -sdk "$SDKROOT" \
   -module-cache-path target/swift-module-cache \
   macos/Sources/Keepy/AppLogo.swift \
   macos/Sources/Keepy/Models.swift macos/Sources/Keepy/CoreClient.swift \
-  macos/Sources/Keepy/TouchID.swift \
+  macos/Sources/Keepy/TouchID.swift macos/Sources/Keepy/VaultManagement.swift \
   macos/Tests/NativeTouchID.swift \
   macos/Sources/Keepy/AppStore.swift macos/Sources/Keepy/WorkspaceView.swift \
   macos/Sources/Keepy/VaultOutline.swift macos/Sources/Keepy/Editors.swift \
@@ -22,7 +22,7 @@ xcrun swiftc -swift-version 5 -warnings-as-errors -sdk "$SDKROOT" \
   macos/Tests/NativeOutlineKeyboard.swift \
   macos/Tests/NativeTagFilter.swift \
   macos/Sources/Keepy/TrayShortcut.swift macos/Sources/Keepy/TrayMenu.swift \
-  macos/Tests/NativeTrayShortcut.swift \
+  macos/Tests/NativeTrayShortcut.swift macos/Tests/NativeVaultManagement.swift \
   macos/Tests/Integration.swift -o "$scratch/integration"
 KEEPY_DATA_DIR="$scratch/data" "$scratch/integration" \
   "$PWD/target/macos/$arch/Keepy.app/Contents/MacOS/keepy-core" "$scratch/test-key" | tee "$scratch/native-output.log"

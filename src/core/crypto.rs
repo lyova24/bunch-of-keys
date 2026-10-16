@@ -327,6 +327,31 @@ impl UnlockedVault {
     pub fn envelope(&self) -> &VaultEnvelope {
         &self.envelope
     }
+
+    /// Prepare a replacement wrapping without mutating the live session. The
+    /// authenticated payload and vault key remain unchanged; the caller must
+    /// persist this envelope atomically before locking the session.
+    pub fn prepare_password_change(
+        &self,
+        current_password: &[u8],
+        new_password: &[u8],
+    ) -> Result<VaultEnvelope, CryptoError> {
+        let _verified = self.envelope.clone().unlock(current_password)?;
+        let salt = random_bytes::<SALT_LEN>()?;
+        let wrapping_key = derive_key(new_password, &salt, DEFAULT_KDF_PARAMETERS)?;
+        let mut envelope = self.envelope.clone();
+        envelope.kdf = KdfEnvelope {
+            algorithm: "argon2id".to_owned(),
+            parameters: DEFAULT_KDF_PARAMETERS,
+            salt: BASE64.encode(salt),
+        };
+        envelope.wrapped_key = encrypt_blob(
+            &wrapping_key,
+            &self.key[..],
+            associated_data(self.vault_id(), "wrapped-key").as_bytes(),
+        )?;
+        Ok(envelope)
+    }
 }
 
 fn derive_key(
@@ -455,6 +480,41 @@ mod tests {
         )
         .unwrap();
         data
+    }
+
+    #[test]
+    fn password_change_uses_fresh_wrapping_and_keeps_payload_and_vault_key() {
+        let original =
+            VaultEnvelope::create_with_parameters(b"original-password", sample_data(), TEST_KDF)
+                .unwrap();
+        let next = original
+            .prepare_password_change(b"original-password", b"replacement-password")
+            .unwrap();
+        assert_eq!(next.vault_id, original.vault_id());
+        assert_ne!(next.kdf.salt, original.envelope.kdf.salt);
+        assert_ne!(next.wrapped_key.nonce, original.envelope.wrapped_key.nonce);
+        assert_eq!(next.payload.nonce, original.envelope.payload.nonce);
+        assert_eq!(
+            next.payload.ciphertext,
+            original.envelope.payload.ciphertext
+        );
+        let reopened = next.unlock(b"replacement-password").unwrap();
+        // Keep raw key material out of assertion diagnostics.
+        let same_key = original.key[..] == reopened.key[..];
+        assert!(same_key);
+        assert_eq!(original.data(), reopened.data());
+        assert!(
+            original
+                .prepare_password_change(b"wrong-password", b"replacement-password")
+                .is_err()
+        );
+        assert!(
+            original
+                .envelope
+                .clone()
+                .unlock(b"original-password")
+                .is_ok()
+        );
     }
 
     #[test]

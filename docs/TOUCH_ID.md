@@ -110,3 +110,7 @@ Touch ID hardware for each supported architecture:
 Real Touch ID, profile-authorized Keychain reads, and signed update continuity
 require a provisioned build and human biometric interaction. Do not report mock
 or ad-hoc tests as completing those hardware checks.
+
+Changing a master password from **Vault → Change Master Password…** invalidates
+the old enrollment and locks the vault. Unlock with the new master password,
+then enroll Touch ID again. Renaming a vault preserves its existing enrollment.

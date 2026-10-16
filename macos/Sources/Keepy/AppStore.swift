@@ -4,7 +4,7 @@ import ServiceManagement
 import UniformTypeIdentifiers
 
 struct EditorRoute: Identifiable {
-    enum Kind { case entry(VaultNode?), group(VaultNode?), keys, createVault }
+    enum Kind { case entry(VaultNode?), group(VaultNode?), keys, createVault, renameVault(VaultSummary), changeMasterPassword(String) }
     var id = UUID()
     var kind: Kind
     var parentId: String?
@@ -420,6 +420,82 @@ struct EditorRoute: Identifiable {
             } else if error.localizedDescription.hasPrefix("Touch ID enrollment is no longer valid") {
                 try? biometricKeychain.remove(vaultID: id); touchIDEnrolled = false
             }
+        }
+    }
+}
+
+extension AppStore {
+    var canManageVault: Bool {
+        canManageTouchID && !showingTouchIDSetup
+    }
+    func manageVault(password: Bool) {
+        guard canManageVault, let id = vault?.id else { return }
+        error = nil; notice = nil
+        editor = EditorRoute(kind: password ? .changeMasterPassword(id) : .renameVault(VaultSummary(id: id, name: vaultName)))
+    }
+    func vaultNameError(_ name: String, excluding id: String? = nil) -> String? {
+        let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if name.isEmpty { return "Enter a vault name." }
+        if name.unicodeScalars.count > 80 || name.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) {
+            return "Use at most 80 characters without control characters."
+        }
+        if vaults.contains(where: { $0.id != id && $0.name.lowercased() == name.lowercased() }) {
+            return "A vault with this name already exists."
+        }
+        return nil
+    }
+    private func canSubmitVaultManagement(_ id: String, password: Bool) -> Bool {
+        guard vault?.id == id, serviceAvailable, !busy, !showingKeys, !showingTouchIDSetup,
+              !settingsHaveChanges, sshPrompt == nil, deleteTarget == nil else { return false }
+        guard let editor else { return true }
+        switch editor.kind {
+        case .renameVault(let target): return !password && target.id == id
+        case .changeMasterPassword(let target): return password && target == id
+        default: return false
+        }
+    }
+    func renameVault(id: String, name: String) async -> Bool {
+        guard canSubmitVaultManagement(id, password: false) else { return false }
+        if let validation = vaultNameError(name, excluding: id) { error = validation; return false }
+        let generation = epoch
+        busy = true; error = nil; touch()
+        defer { busy = false }
+        do {
+            let summary = try CoreClient.decoder.decode(VaultSummary.self, from: await core.request("rename_vault", ["vault_id": id, "name": name]))
+            guard generation == epoch, vault?.id == id, summary.id == id else { return false }
+            vaults = vaults.map { $0.id == id ? summary : $0 }
+            editor = nil; notice = "Vault renamed."
+            return true
+        } catch {
+            guard generation == epoch, vault?.id == id else { return false }
+            fail(error); return false
+        }
+    }
+    func changeMasterPassword(id: String, current: String, new: String, confirmation: String) async -> Bool {
+        guard canSubmitVaultManagement(id, password: true) else { return false }
+        if let validation = PasswordChangeValidation.error(current: current, new: new, confirmation: confirmation) {
+            error = validation; return false
+        }
+        let generation = epoch
+        busy = true; error = nil; touch()
+        defer { busy = false }
+        do {
+            _ = try await core.request("change_master_password", ["vault_id": id, "current_password": current, "new_password": new, "confirmation": confirmation])
+            guard generation == epoch, vault?.id == id else { return false }
+            // The service already locked after persisting the new envelope.
+            // Clear all native session state and invalidate local Touch ID too.
+            let hadTouchID = touchIDEnrolled
+            epoch += 1; clearSession()
+            selectedVaultId = id; touchIDEnrolled = false
+            if hadTouchID {
+                do { try biometricKeychain.remove(vaultID: id) }
+                catch { touchIDMessage = "The password changed. Set up Touch ID again after unlocking with the new password." }
+            }
+            notice = "Master password changed. Unlock with your new password."
+            return true
+        } catch {
+            guard generation == epoch, vault?.id == id else { return false }
+            fail(error); return false
         }
     }
 }

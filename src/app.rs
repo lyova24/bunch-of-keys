@@ -77,10 +77,14 @@ pub enum AppError {
     VaultNotFound,
     #[error("a vault with this name already exists")]
     DuplicateVaultName,
-    #[error("vault name must contain between 1 and 80 characters")]
+    #[error("vault name must contain between 1 and 80 characters without control characters")]
     InvalidVaultName,
     #[error("master password must contain at least 8 characters")]
     WeakPassword,
+    #[error("new password and confirmation do not match")]
+    PasswordConfirmationMismatch,
+    #[error("choose a new password different from the current password")]
+    UnchangedPassword,
     #[error("vault metadata does not match the encrypted file")]
     VaultIdMismatch,
     #[error("Touch ID request expired or was cancelled. Try again or use the master password.")]
@@ -207,7 +211,7 @@ impl AppState {
         if config
             .vaults
             .iter()
-            .any(|record| record.name.eq_ignore_ascii_case(&name))
+            .any(|record| same_vault_name(&record.name, &name))
         {
             return Err(AppError::DuplicateVaultName);
         }
@@ -260,6 +264,87 @@ impl AppState {
             .lock()
             .map_err(|_| AppError::StateUnavailable)? = Some(Session { record, vault });
         Ok(view)
+    }
+
+    pub fn rename_vault(&self, vault_id: Uuid, name: &str) -> Result<VaultSummary, AppError> {
+        let name = validate_vault_name(name)?;
+        // Match bootstrap's config -> session lock order. No visible state is
+        // changed until the registry has been committed successfully.
+        let mut config = self.config.lock().map_err(|_| AppError::StateUnavailable)?;
+        let mut session = self
+            .session
+            .lock()
+            .map_err(|_| AppError::StateUnavailable)?;
+        let current = session
+            .as_mut()
+            .filter(|s| s.record.id == vault_id)
+            .ok_or(AppError::Locked)?;
+        if config
+            .vaults
+            .iter()
+            .any(|record| record.id != vault_id && same_vault_name(&record.name, &name))
+        {
+            return Err(AppError::DuplicateVaultName);
+        }
+        if current.record.name == name {
+            return Ok(VaultSummary::from(&current.record));
+        }
+        let mut next = config.clone();
+        let record = next
+            .vaults
+            .iter_mut()
+            .find(|record| record.id == vault_id)
+            .ok_or(AppError::VaultNotFound)?;
+        record.name = name;
+        let record = record.clone();
+        self.storage.save_config(&next)?;
+        *config = next;
+        current.record = record;
+        self.touch();
+        Ok(VaultSummary::from(&current.record))
+    }
+
+    pub fn change_master_password(
+        &self,
+        vault_id: Uuid,
+        current_password: &[u8],
+        new_password: &[u8],
+        confirmation: &[u8],
+    ) -> Result<(), AppError> {
+        validate_password(new_password)?;
+        if new_password != confirmation {
+            return Err(AppError::PasswordConfirmationMismatch);
+        }
+        if new_password == current_password {
+            return Err(AppError::UnchangedPassword);
+        }
+        // Serialize with lock/biometric unlock; a stale form can never target
+        // whichever vault happens to be open when the request is received.
+        let mut pending = self
+            .biometric_request
+            .lock()
+            .map_err(|_| AppError::StateUnavailable)?;
+        let mut session = self
+            .session
+            .lock()
+            .map_err(|_| AppError::StateUnavailable)?;
+        let current = session
+            .as_ref()
+            .filter(|s| s.record.id == vault_id)
+            .ok_or(AppError::Locked)?;
+        let next = current
+            .vault
+            .prepare_password_change(current_password, new_password)?;
+        self.storage
+            .write_vault(&current.record, &next.to_bytes()?)?;
+        // Only a successful atomic write invalidates the session and old
+        // biometric binding. On failure the previous session stays usable.
+        *session = None;
+        *pending = None;
+        drop(session);
+        drop(pending);
+        self.stop_ssh_sessions();
+        Ok(())
     }
 
     fn biometric_envelope(&self, vault_id: Uuid) -> Result<(VaultRecord, VaultEnvelope), AppError> {
@@ -508,10 +593,14 @@ impl From<&VaultRecord> for VaultSummary {
 
 fn validate_vault_name(name: &str) -> Result<String, AppError> {
     let name = name.trim();
-    if name.is_empty() || name.chars().count() > 80 {
+    if name.is_empty() || name.chars().count() > 80 || name.chars().any(char::is_control) {
         return Err(AppError::InvalidVaultName);
     }
     Ok(name.to_owned())
+}
+
+fn same_vault_name(left: &str, right: &str) -> bool {
+    left.to_lowercase() == right.to_lowercase()
 }
 
 fn validate_password(password: &[u8]) -> Result<(), AppError> {
@@ -719,3 +808,7 @@ mod tests {
         assert!(state.active_ssh.lock().unwrap().is_empty());
     }
 }
+
+#[cfg(test)]
+#[path = "app/vault_management_tests.rs"]
+mod vault_management_tests;
