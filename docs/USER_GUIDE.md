@@ -143,6 +143,15 @@ belongs to the app; copying unrelated content prevents its removal. The vault
 also locks when the Mac or display sleeps or the login session becomes inactive.
 Shift-Command-L locks immediately. Closing the window keeps the app in the menu
 bar. The menu bar offers Open, Lock, Settings and Quit; quitting locks first.
+Press **Command-F8** from any app to open this menu, then use the arrow
+keys and Return to choose an action, or Escape to dismiss it. If the top row
+controls media, hold Fn as well to send F8. In **Settings →
+Keyboard Shortcuts**, click the shortcut and press a new combination with Control,
+Option or Command. Escape cancels recording. You can disable the shortcut or
+reset it to the default. These changes apply immediately and are saved on this
+Mac; they do not require the Save button. If a combination is unavailable, choose
+another one; the previous setting is retained.
+
 Launch at login uses macOS Login Items and starts hidden in the menu bar. If macOS requires approval, Settings
 provides a link to the system Login Items page.
 

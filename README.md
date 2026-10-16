@@ -4,7 +4,7 @@
 
 A native macOS application for local, encrypted credential collections.
 Formerly bunch-of-keys; existing vaults migrate automatically to Keepy.
-Current version: **2.2.2**. Requires **macOS 14 Sonoma or later**.
+Current version: **2.2.3**. Requires **macOS 14 Sonoma or later**.
 
 The interface uses SwiftUI and AppKit: a standard Mac window, a compact tree with
 keyboard navigation and drag-and-drop, native menus, file panels, and Settings.
@@ -32,6 +32,7 @@ Linux and Windows are no longer supported.
 - YAML import through the native file picker.
 - Inactivity, sleep, display-sleep, and session locking; conditional clipboard
   clearing; launch at login through ServiceManagement; and menu bar operation.
+- A configurable global menu bar shortcut (Command-F8 by default).
 - Existing 1.x macOS vaults open in place, with the same encryption and storage
   locations. Back up data before upgrading; see the installation guide.
 

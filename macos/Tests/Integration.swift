@@ -6,6 +6,7 @@ import Foundation
         try await NativeOutlineKeyboard.run()
         try verifyTagFiltering()
         let executable = URL(fileURLWithPath: CommandLine.arguments[1])
+        try await NativeTrayShortcut.run(executable: executable)
         let client = CoreClient(executable: executable)
         func call(_ command: String, _ args: [String: Any] = [:]) async throws -> Data { try await client.request(command, args) }
         func mutation(_ command: String, _ args: [String: Any]) async throws -> Vault {

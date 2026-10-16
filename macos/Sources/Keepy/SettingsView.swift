@@ -21,6 +21,7 @@ struct SettingsView: View {
                     Stepper("Clear clipboard after \(draft.clipboardClearSeconds) seconds", value: $draft.clipboardClearSeconds, in: 5...3600, step: 5)
                     Text("Vaults also lock when the Mac sleeps, the display sleeps, or your login session becomes inactive.").font(.caption).foregroundStyle(.secondary)
                 }
+                TrayShortcutSection()
                 Section("Startup") {
                     Toggle("Launch at login", isOn: $draft.autostart)
                     if SMAppService.mainApp.status == .requiresApproval {

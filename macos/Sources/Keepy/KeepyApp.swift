@@ -6,11 +6,14 @@ import CoreServices
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @StateObject private var store = AppStore()
     @StateObject private var updates = UpdateController()
+    @StateObject private var shortcuts = TrayShortcutSettings()
+    @StateObject private var tray = TrayMenuController()
     var body: some Scene {
         Window(AppLogo.name, id: "main") {
             WorkspaceView().environmentObject(store).preferredColorScheme(store.colorScheme)
                 .modifier(WindowSurface(enabled: store.settings.liquidGlass))
-                .onAppear { delegate.attach(store, updates: updates) }
+                .background(TrayMenuBridge(controller: tray, store: store, shortcuts: shortcuts))
+                .onAppear { delegate.attach(store, updates: updates, tray: tray) }
         }
         .defaultSize(width: 560, height: 620)
         .windowResizability(.contentMinSize)
@@ -33,30 +36,9 @@ import CoreServices
             }
         }
         Settings {
-            SettingsView().environmentObject(store).environmentObject(updates).preferredColorScheme(store.colorScheme)
+            SettingsView().environmentObject(store).environmentObject(updates).environmentObject(shortcuts).preferredColorScheme(store.colorScheme)
                 .modifier(WindowSurface(enabled: store.settings.liquidGlass))
         }
-        MenuBarExtra {
-            StatusMenu().environmentObject(store)
-        } label: {
-            HStack(spacing: 2) {
-                Image(nsImage: AppLogo.menuBarImage)
-                if store.vault == nil { Image(systemName: "lock.fill").font(.system(size: 8, weight: .semibold)) }
-            }.accessibilityElement(children: .ignore)
-                .accessibilityLabel(store.vault == nil ? "Keepy, vault locked" : "Keepy, vault unlocked")
-        }
-    }
-}
-struct StatusMenu: View {
-    @EnvironmentObject var store: AppStore
-    @Environment(\.openWindow) private var openWindow
-    var body: some View {
-        Text(store.vault == nil ? "Vault locked" : store.vaultName)
-        Button("Open Keepy") { openWindow(id: "main"); NSApp.activate(ignoringOtherApps: true) }
-        Button("Lock Vault") { store.lock() }.disabled(store.vault == nil)
-        Divider()
-        SettingsLink { Text("Settings…") }
-        Button("Quit Keepy") { NSApp.terminate(nil) }.keyboardShortcut("q")
     }
 }
 @MainActor final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -65,6 +47,7 @@ struct StatusMenu: View {
     private var eventMonitor: Any?
     private var timer: Timer?
     private var launchedAtLogin = false
+    private var tray: TrayMenuController?
     func applicationDidFinishLaunching(_ notification: Notification) {
         let event = NSAppleEventManager.shared().currentAppleEvent
         launchedAtLogin = event?.paramDescriptor(forKeyword: keyAEPropData)?.enumCodeValue == keyAELaunchedAsLogInItem || event?.paramDescriptor(forKeyword: keyAELaunchedAsLogInItem) != nil || ProcessInfo.processInfo.arguments.contains("--hidden")
@@ -78,9 +61,10 @@ struct StatusMenu: View {
             NSApp.terminate(nil)
         }
     }
-    func attach(_ store: AppStore, updates: UpdateController) {
+    func attach(_ store: AppStore, updates: UpdateController, tray: TrayMenuController) {
         guard self.store == nil else { return }
         self.store = store
+        self.tray = tray
         updates.start()
         if !UserDefaults.standard.bool(forKey: "compactWorkspaceLayout") {
             DispatchQueue.main.async {
@@ -123,6 +107,7 @@ struct StatusMenu: View {
             guard alert.runModal() == .alertSecondButtonReturn else { return .terminateCancel }
         }
         timer?.invalidate()
+        tray?.stop()
         Task { await store?.shutdown(); sender.reply(toApplicationShouldTerminate: true) }
         return .terminateLater
     }

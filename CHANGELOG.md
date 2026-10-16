@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.2.3 - 2026-10-16
+
+- Open the native menu bar menu globally with Command-F8, including while
+  Keepy is hidden or its main window is closed (#57).
+- Add immediate shortcut recording, disabling and reset in Settings; preserve
+  the previous shortcut on registration conflicts and release it on shutdown.
+
 ## 2.2.2 - 2026-10-16
 
 - Add optional per-vault Touch ID enrollment and unlocking through the macOS

@@ -29,7 +29,7 @@ directory; macOS app launches activate an existing instance. CoreClient handles
 transport; AppStore publishes the masked view, selection, editor state, settings,
 and active connections. A generation counter rejects late responses after
 locking. SwiftUI uses one native outline for groups, entries, fields and inline
-editors, forms, commands, Settings and MenuBarExtra. AppKit's NSOutlineView supplies native
+editors, forms, commands, Settings and an AppKit NSStatusItem menu. AppKit's NSOutlineView supplies native
 hierarchical keyboard navigation, selection, context menus, and direct moves.
 Search and tag filters disable ordering operations because filtered indices are
 ambiguous.
@@ -66,6 +66,8 @@ The app remains available in the menu bar after closing the main window. Quit
 first requests a lock, then closes the pipe and waits for graceful service exit.
 
 Settings live in the existing registry, including appearance and Liquid Glass.
+The global tray shortcut is a local UserDefaults preference, applied immediately
+through an exclusive Carbon hotkey registration without Accessibility monitoring.
 ServiceManagement's SMAppService controls launch at login. On macOS 26+, the
 Liquid Glass preference combines SwiftUI glassEffect surfaces with a native
 NSVisualEffectView using behind-window blending across the main and Settings
